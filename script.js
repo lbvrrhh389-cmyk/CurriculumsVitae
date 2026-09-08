@@ -166,8 +166,8 @@ function validateStep(step) {
         const nombre = document.getElementById('nombre').value.trim();
         const email = document.getElementById('email').value.trim();
         const telefono = document.getElementById('telefono').value.trim();
-        const puesto = document.getElementById('puesto').value.trim();
-        if (!nombre || !email || !telefono || !puesto) {
+        const ubicacion = document.getElementById('ubicacion').value.trim();
+        if (!nombre || !email || !telefono || !ubicacion) {
             alert('Por favor completá todos los campos obligatorios (marcados con *).');
             return false;
         }
@@ -490,7 +490,7 @@ function enviarSolicitud() {
         <p><strong>Nombre:</strong> ${data.nombre}</p>
         <p><strong>Email:</strong> ${data.email}</p>
         <p><strong>Teléfono:</strong> ${data.telefono}</p>
-        <p><strong>Puesto:</strong> ${data.puesto}</p>
+        <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
         <p><strong>Comprobante:</strong> ${data.comprobanteName || 'Adjuntado'}</p>
     `;
 

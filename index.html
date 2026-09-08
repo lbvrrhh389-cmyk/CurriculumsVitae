@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LBV RRHH - Generador de Curriculum Vitae</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <span class="logo-icon">LBV</span>
+                <span class="logo-text">RRHH</span>
+            </div>
+            <p class="tagline">Generador profesional de Curriculum Vitae</p>
+        </header>
+
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="steps-indicators">
+                <div class="step-indicator active" data-step="1">1. Datos</div>
+                <div class="step-indicator" data-step="2">2. Experiencia</div>
+                <div class="step-indicator" data-step="3">3. Estudios</div>
+                <div class="step-indicator" data-step="4">4. Habilidades</div>
+                <div class="step-indicator" data-step="5">5. Pago</div>
+                <div class="step-indicator" data-step="6">6. CV</div>
+            </div>
+        </div>
+
+        <!-- Form Container -->
+        <main class="form-container">
+            <!-- Step 1: Datos Personales -->
+            <section class="form-step active" id="step1">
+                <h2 class="step-title">Datos Personales</h2>
+                <p class="step-desc">Completá tu información básica y cargá una foto profesional.</p>
+                
+                <div class="form-grid">
+                    <div class="photo-upload-area">
+                        <div class="photo-preview" id="photoPreview">
+                            <span class="photo-placeholder">📷</span>
+                            <p>Subí tu foto</p>
+                        </div>
+                        <input type="file" id="photoInput" accept="image/*" hidden>
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('photoInput').click()">Seleccionar foto</button>
+                    </div>
+
+                    <div class="fields-column">
+                        <div class="form-group">
+                            <label for="nombre">Nombre completo *</label>
+                            <input type="text" id="nombre" placeholder="Ej: Juan Pérez" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email *</label>
+                            <input type="email" id="email" placeholder="juan@email.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="telefono">Teléfono / WhatsApp *</label>
+                            <input type="tel" id="telefono" placeholder="+54 9 11 1234-5678" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ubicacion">Ubicación</label>
+                            <input type="text" id="ubicacion" placeholder="Ciudad, Provincia">
+                        </div>
+                        <div class="form-group">
+                            <label for="linkedin">LinkedIn (opcional)</label>
+                            <input type="url" id="linkedin" placeholder="https://linkedin.com/in/tu-perfil">
+                        </div>
+                        <div class="form-group">
+                            <label for="puesto">Puesto o área profesional *</label>
+                            <input type="text" id="puesto" placeholder="Ej: Desarrollador Full Stack, Contador, etc." required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="resumen">Resumen profesional (opcional)</label>
+                    <textarea id="resumen" rows="3" placeholder="Breve descripción de tu perfil profesional..."></textarea>
+                </div>
+
+                <div class="nav-buttons">
+                    <button type="button" class="btn-primary" onclick="nextStep(1)">Siguiente →</button>
+                </div>
+            </section>
+
+            <!-- Step 2: Experiencias Laborales -->
+            <section class="form-step" id="step2">
+                <h2 class="step-title">Experiencias Laborales</h2>
+                <p class="step-desc">Agregá tus experiencias laborales. Podés sumar todas las que necesites.</p>
+                
+                <div id="experienciasContainer">
+                    <!-- Experiences will be added here dynamically -->
+                </div>
+                
+                <button type="button" class="btn-add" onclick="addExperiencia()">+ Agregar experiencia</button>
+
+                <div class="nav-buttons">
+                    <button type="button" class="btn-secondary" onclick="prevStep(2)">← Anterior</button>
+                    <button type="button" class="btn-primary" onclick="nextStep(2)">Siguiente →</button>
+                </div>
+            </section>
+
+            <!-- Step 3: Estudios -->
+            <section class="form-step" id="step3">
+                <h2 class="step-title">Estudios y Formación</h2>
+                <p class="step-desc">Indicá tus estudios formales y cursos opcionales.</p>
+                
+                <h3 class="subsection-title">Estudios formales</h3>
+                <div id="estudiosContainer">
+                    <!-- Studies will be added here -->
+                </div>
+                <button type="button" class="btn-add" onclick="addEstudio()">+ Agregar estudio</button>
+
+                <h3 class="subsection-title" style="margin-top: 2rem;">Cursos y certificaciones (opcional)</h3>
+                <div id="cursosContainer">
+                    <!-- Courses will be added here -->
+                </div>
+                <button type="button" class="btn-add" onclick="addCurso()">+ Agregar curso</button>
+
+                <div class="nav-buttons">
+                    <button type="button" class="btn-secondary" onclick="prevStep(3)">← Anterior</button>
+                    <button type="button" class="btn-primary" onclick="nextStep(3)">Siguiente →</button>
+                </div>
+            </section>
+
+            <!-- Step 4: Conocimientos y Habilidades -->
+            <section class="form-step" id="step4">
+                <h2 class="step-title">Conocimientos y Habilidades</h2>
+                <p class="step-desc">Listá tus habilidades técnicas, idiomas y herramientas.</p>
+                
+                <div class="form-group">
+                    <label for="habilidades">Habilidades técnicas / Soft skills</label>
+                    <textarea id="habilidades" rows="3" placeholder="Ej: Trabajo en equipo, Liderazgo, Comunicación efectiva, Resolución de problemas..."></textarea>
+                    <small>Separá por comas o saltos de línea</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="idiomas">Idiomas</label>
+                    <textarea id="idiomas" rows="2" placeholder="Ej: Español (nativo), Inglés (avanzado), Portugués (intermedio)"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="herramientas">Herramientas y software</label>
+                    <textarea id="herramientas" rows="2" placeholder="Ej: Microsoft Office, Excel avanzado, AutoCAD, Photoshop, SAP..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="objetivo">Objetivo del CV *</label>
+                    <textarea id="objetivo" rows="3" placeholder="¿Es para una búsqueda laboral específica? Contanos el puesto o empresa para adaptar mejor el CV. Si es general, escribí 'General'." required></textarea>
+                    <small>Esto nos ayuda a adaptar el estilo del curriculum.</small>
+                </div>
+
+                <div class="nav-buttons">
+                    <button type="button" class="btn-secondary" onclick="prevStep(4)">← Anterior</button>
+                    <button type="button" class="btn-primary" onclick="nextStep(4)">Siguiente →</button>
+                </div>
+            </section>
+
+            <!-- Step 5: Comprobante de Pago -->
+            <section class="form-step" id="step5">
+                <h2 class="step-title">Confirmación y Pago</h2>
+                <p class="step-desc">Para generar tu CV profesional, adjuntá el comprobante de pago. Es un requisito obligatorio.</p>
+                
+                <div class="payment-box">
+                    <div class="payment-info">
+                        <h3>💳 Información de pago</h3>
+                        <p>Realizá la transferencia o pago y adjuntá el comprobante a continuación.</p>
+                        <p class="payment-note">Una vez validado, podrás previsualizar y descargar tu Curriculum Vitae.</p>
+                    </div>
+
+                    <div class="file-upload-area" id="comprobanteArea">
+                        <div class="file-preview" id="comprobantePreview">
+                            <span class="file-icon">📄</span>
+                            <p id="comprobanteName">Arrastrá o seleccioná el comprobante</p>
+                            <small>PDF, JPG o PNG (máx. 5MB)</small>
+                        </div>
+                        <input type="file" id="comprobanteInput" accept=".pdf,.jpg,.jpeg,.png" hidden>
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('comprobanteInput').click()">Seleccionar archivo</button>
+                    </div>
+                </div>
+
+                <div class="nav-buttons">
+                    <button type="button" class="btn-secondary" onclick="prevStep(5)">← Anterior</button>
+                    <button type="button" class="btn-primary" id="btnGenerar" onclick="generarCV()" disabled>Generar Curriculum Vitae →</button>
+                </div>
+            </section>
+
+            <!-- Step 6: Preview y Descarga -->
+            <section class="form-step" id="step6">
+                <h2 class="step-title">Tu Curriculum Vitae</h2>
+                <p class="step-desc">Previsualizá, descargá o enviá por WhatsApp tu CV profesional.</p>
+                
+                <div class="cv-actions">
+                    <button type="button" class="btn-primary" onclick="descargarPDF()">📥 Descargar PDF</button>
+                    <button type="button" class="btn-whatsapp" onclick="enviarWhatsApp()">📱 Enviar por WhatsApp</button>
+                    <button type="button" class="btn-secondary" onclick="volverAEditar()">✏️ Editar datos</button>
+                </div>
+
+                <div class="cv-preview-wrapper">
+                    <div id="cvPreview" class="cv-document">
+                        <!-- CV content generated here -->
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p>© 2026 LBV RRHH · Generador de CV profesional</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

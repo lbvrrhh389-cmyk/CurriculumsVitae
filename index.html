@@ -7,11 +7,11 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&family=Roboto:wght@400;500;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-container" id="clientApp">
         <!-- Header -->
         <header class="app-header">
             <div class="logo">
@@ -22,7 +22,7 @@
         </header>
 
         <!-- Progress Bar -->
-        <div class="progress-container">
+        <div class="progress-container" id="progressContainer">
             <div class="progress-bar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
@@ -32,7 +32,7 @@
                 <div class="step-indicator" data-step="3">3. Estudios</div>
                 <div class="step-indicator" data-step="4">4. Habilidades</div>
                 <div class="step-indicator" data-step="5">5. Pago</div>
-                <div class="step-indicator" data-step="6">6. CV</div>
+                <div class="step-indicator" data-step="6">6. Listo</div>
             </div>
         </div>
 
@@ -76,14 +76,15 @@
                         </div>
                         <div class="form-group">
                             <label for="puesto">Puesto o área profesional *</label>
-                            <input type="text" id="puesto" placeholder="Ej: Desarrollador Full Stack, Contador, etc." required>
+                            <input type="text" id="puesto" placeholder="Ej: Desarrollador Full Stack, Contador, Administrativo, etc." required>
                         </div>
                     </div>
                 </div>
 
                 <div class="form-group full-width">
                     <label for="resumen">Resumen profesional (opcional)</label>
-                    <textarea id="resumen" rows="3" placeholder="Breve descripción de tu perfil profesional..."></textarea>
+                    <textarea id="resumen" rows="3" placeholder="Si lo dejás vacío, nuestra IA lo generará automáticamente destacando tus fortalezas según el puesto..."></textarea>
+                    <small>💡 Si no sabés qué poner, dejalo vacío. La IA armará una presentación profesional con palabras clave según tu puesto y habilidades.</small>
                 </div>
 
                 <div class="nav-buttons">
@@ -96,10 +97,7 @@
                 <h2 class="step-title">Experiencias Laborales</h2>
                 <p class="step-desc">Agregá tus experiencias laborales. Podés sumar todas las que necesites.</p>
                 
-                <div id="experienciasContainer">
-                    <!-- Experiences will be added here dynamically -->
-                </div>
-                
+                <div id="experienciasContainer"></div>
                 <button type="button" class="btn-add" onclick="addExperiencia()">+ Agregar experiencia</button>
 
                 <div class="nav-buttons">
@@ -111,18 +109,18 @@
             <!-- Step 3: Estudios -->
             <section class="form-step" id="step3">
                 <h2 class="step-title">Estudios y Formación</h2>
-                <p class="step-desc">Indicá tus estudios formales y cursos opcionales.</p>
+                <p class="step-desc">Indicá tus estudios superiores, secundarios y cursos opcionales.</p>
                 
-                <h3 class="subsection-title">Estudios formales</h3>
-                <div id="estudiosContainer">
-                    <!-- Studies will be added here -->
-                </div>
-                <button type="button" class="btn-add" onclick="addEstudio()">+ Agregar estudio</button>
+                <h3 class="subsection-title">🎓 Estudios Superiores</h3>
+                <div id="estudiosSuperioresContainer"></div>
+                <button type="button" class="btn-add" onclick="addEstudioSuperior()">+ Agregar estudio superior</button>
 
-                <h3 class="subsection-title" style="margin-top: 2rem;">Cursos y certificaciones (opcional)</h3>
-                <div id="cursosContainer">
-                    <!-- Courses will be added here -->
-                </div>
+                <h3 class="subsection-title" style="margin-top: 2rem;">🏫 Estudios Secundarios</h3>
+                <div id="estudiosSecundariosContainer"></div>
+                <button type="button" class="btn-add" onclick="addEstudioSecundario()">+ Agregar estudio secundario</button>
+
+                <h3 class="subsection-title" style="margin-top: 2rem;">📜 Cursos y certificaciones (opcional)</h3>
+                <div id="cursosContainer"></div>
                 <button type="button" class="btn-add" onclick="addCurso()">+ Agregar curso</button>
 
                 <div class="nav-buttons">
@@ -134,28 +132,74 @@
             <!-- Step 4: Conocimientos y Habilidades -->
             <section class="form-step" id="step4">
                 <h2 class="step-title">Conocimientos y Habilidades</h2>
-                <p class="step-desc">Listá tus habilidades técnicas, idiomas y herramientas.</p>
+                <p class="step-desc">Seleccioná o escribí tus habilidades. Te damos ejemplos para que sea más fácil.</p>
                 
                 <div class="form-group">
-                    <label for="habilidades">Habilidades técnicas / Soft skills</label>
-                    <textarea id="habilidades" rows="3" placeholder="Ej: Trabajo en equipo, Liderazgo, Comunicación efectiva, Resolución de problemas..."></textarea>
-                    <small>Separá por comas o saltos de línea</small>
+                    <label>Habilidades y competencias</label>
+                    <p class="hint-text">Hacé clic en los ejemplos que se adapten a vos (se agregan solos). También podés escribir las tuyas.</p>
+                    <div class="skill-examples" id="skillExamples"></div>
+                    <textarea id="habilidades" rows="3" placeholder="Tus habilidades aparecerán aquí. También podés escribirlas manualmente separadas por comas..."></textarea>
+                    <small>Cuando se genere el CV, estas habilidades se transformarán en competencias profesionales de RRHH.</small>
                 </div>
 
                 <div class="form-group">
                     <label for="idiomas">Idiomas</label>
-                    <textarea id="idiomas" rows="2" placeholder="Ej: Español (nativo), Inglés (avanzado), Portugués (intermedio)"></textarea>
+                    <div class="skill-examples compact">
+                        <button type="button" class="skill-chip" onclick="addToField('idiomas', 'Español (nativo)')">Español (nativo)</button>
+                        <button type="button" class="skill-chip" onclick="addToField('idiomas', 'Inglés (básico)')">Inglés (básico)</button>
+                        <button type="button" class="skill-chip" onclick="addToField('idiomas', 'Inglés (intermedio)')">Inglés (intermedio)</button>
+                        <button type="button" class="skill-chip" onclick="addToField('idiomas', 'Inglés (avanzado)')">Inglés (avanzado)</button>
+                        <button type="button" class="skill-chip" onclick="addToField('idiomas', 'Portugués (básico)')">Portugués (básico)</button>
+                        <button type="button" class="skill-chip" onclick="addToField('idiomas', 'Portugués (intermedio)')">Portugués (intermedio)</button>
+                    </div>
+                    <textarea id="idiomas" rows="2" placeholder="Ej: Español (nativo), Inglés (avanzado)..."></textarea>
                 </div>
 
                 <div class="form-group">
                     <label for="herramientas">Herramientas y software</label>
-                    <textarea id="herramientas" rows="2" placeholder="Ej: Microsoft Office, Excel avanzado, AutoCAD, Photoshop, SAP..."></textarea>
+                    <div class="skill-examples compact">
+                        <button type="button" class="skill-chip" onclick="addToField('herramientas', 'Microsoft Office')">Microsoft Office</button>
+                        <button type="button" class="skill-chip" onclick="addToField('herramientas', 'Excel avanzado')">Excel avanzado</button>
+                        <button type="button" class="skill-chip" onclick="addToField('herramientas', 'Google Workspace')">Google Workspace</button>
+                        <button type="button" class="skill-chip" onclick="addToField('herramientas', 'WhatsApp Business')">WhatsApp Business</button>
+                        <button type="button" class="skill-chip" onclick="addToField('herramientas', 'Canva')">Canva</button>
+                        <button type="button" class="skill-chip" onclick="addToField('herramientas', 'SAP')">SAP</button>
+                        <button type="button" class="skill-chip" onclick="addToField('herramientas', 'AutoCAD')">AutoCAD</button>
+                        <button type="button" class="skill-chip" onclick="addToField('herramientas', 'Photoshop')">Photoshop</button>
+                    </div>
+                    <textarea id="herramientas" rows="2" placeholder="Ej: Microsoft Office, Excel avanzado, Canva..."></textarea>
                 </div>
 
                 <div class="form-group">
                     <label for="objetivo">Objetivo del CV *</label>
                     <textarea id="objetivo" rows="3" placeholder="¿Es para una búsqueda laboral específica? Contanos el puesto o empresa para adaptar mejor el CV. Si es general, escribí 'General'." required></textarea>
-                    <small>Esto nos ayuda a adaptar el estilo del curriculum.</small>
+                    <small>Esto nos ayuda a adaptar el estilo y el resumen del curriculum.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Elegí el estilo preferido de tu CV *</label>
+                    <div class="template-selector" id="templateSelector">
+                        <div class="template-option selected" data-template="moderno" onclick="selectTemplate('moderno')">
+                            <div class="template-preview moderno-preview"></div>
+                            <span>Moderno</span>
+                        </div>
+                        <div class="template-option" data-template="clasico" onclick="selectTemplate('clasico')">
+                            <div class="template-preview clasico-preview"></div>
+                            <span>Clásico</span>
+                        </div>
+                        <div class="template-option" data-template="ejecutivo" onclick="selectTemplate('ejecutivo')">
+                            <div class="template-preview ejecutivo-preview"></div>
+                            <span>Ejecutivo</span>
+                        </div>
+                        <div class="template-option" data-template="minimal" onclick="selectTemplate('minimal')">
+                            <div class="template-preview minimal-preview"></div>
+                            <span>Minimal</span>
+                        </div>
+                        <div class="template-option" data-template="creativo" onclick="selectTemplate('creativo')">
+                            <div class="template-preview creativo-preview"></div>
+                            <span>Creativo</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="nav-buttons">
@@ -167,13 +211,13 @@
             <!-- Step 5: Comprobante de Pago -->
             <section class="form-step" id="step5">
                 <h2 class="step-title">Confirmación y Pago</h2>
-                <p class="step-desc">Para generar tu CV profesional, adjuntá el comprobante de pago. Es un requisito obligatorio.</p>
+                <p class="step-desc">Para finalizar, adjuntá el comprobante de pago. Es un requisito obligatorio.</p>
                 
                 <div class="payment-box">
                     <div class="payment-info">
                         <h3>💳 Información de pago</h3>
                         <p>Realizá la transferencia o pago y adjuntá el comprobante a continuación.</p>
-                        <p class="payment-note">Una vez validado, podrás previsualizar y descargar tu Curriculum Vitae.</p>
+                        <p class="payment-note">Una vez enviado, el equipo de LBV RRHH procesará tu solicitud y generará tu CV profesional.</p>
                     </div>
 
                     <div class="file-upload-area" id="comprobanteArea">
@@ -189,32 +233,97 @@
 
                 <div class="nav-buttons">
                     <button type="button" class="btn-secondary" onclick="prevStep(5)">← Anterior</button>
-                    <button type="button" class="btn-primary" id="btnGenerar" onclick="generarCV()" disabled>Generar Curriculum Vitae →</button>
+                    <button type="button" class="btn-primary" id="btnEnviar" onclick="enviarSolicitud()" disabled>Enviar solicitud →</button>
                 </div>
             </section>
 
-            <!-- Step 6: Preview y Descarga -->
+            <!-- Step 6: Confirmación al cliente (NO muestra el CV) -->
             <section class="form-step" id="step6">
-                <h2 class="step-title">Tu Curriculum Vitae</h2>
-                <p class="step-desc">Previsualizá, descargá o enviá por WhatsApp tu CV profesional.</p>
-                
-                <div class="cv-actions">
-                    <button type="button" class="btn-primary" onclick="descargarPDF()">📥 Descargar PDF</button>
-                    <button type="button" class="btn-whatsapp" onclick="enviarWhatsApp()">📱 Enviar por WhatsApp</button>
-                    <button type="button" class="btn-secondary" onclick="volverAEditar()">✏️ Editar datos</button>
-                </div>
-
-                <div class="cv-preview-wrapper">
-                    <div id="cvPreview" class="cv-document">
-                        <!-- CV content generated here -->
-                    </div>
+                <div class="success-box">
+                    <div class="success-icon">✅</div>
+                    <h2 class="step-title">¡Solicitud enviada con éxito!</h2>
+                    <p class="step-desc" style="text-align:center; max-width:480px; margin:0 auto 1.5rem;">
+                        Recibimos tus datos y el comprobante de pago.<br>
+                        El equipo de <strong>LBV RRHH</strong> generará tu Curriculum Vitae profesional y se pondrá en contacto contigo.
+                    </p>
+                    <div class="success-details" id="successDetails"></div>
+                    <p class="success-note">No es necesario que hagas nada más. Te contactaremos a la brevedad.</p>
+                    <button type="button" class="btn-secondary" onclick="location.reload()" style="margin-top:1.5rem;">Cargar otra solicitud</button>
                 </div>
             </section>
         </main>
 
         <footer class="app-footer">
             <p>© 2026 LBV RRHH · Generador de CV profesional</p>
+            <button type="button" class="admin-link" onclick="mostrarLoginAdmin()">Acceso administración</button>
         </footer>
+    </div>
+
+    <!-- ========== PANEL DE ADMINISTRACIÓN ========== -->
+    <div id="adminApp" class="admin-app hidden">
+        <header class="admin-header">
+            <div class="logo">
+                <span class="logo-icon">LBV</span>
+                <span class="logo-text">RRHH</span>
+            </div>
+            <h1>Panel de Administración</h1>
+            <button type="button" class="btn-secondary btn-sm" onclick="cerrarAdmin()">← Volver al formulario</button>
+        </header>
+
+        <div class="admin-layout">
+            <!-- Lista de solicitudes -->
+            <aside class="admin-sidebar">
+                <h3>Solicitudes recibidas</h3>
+                <div id="listaSolicitudes" class="lista-solicitudes">
+                    <p class="empty-msg">No hay solicitudes todavía.</p>
+                </div>
+                <button type="button" class="btn-secondary btn-sm" onclick="limpiarTodasSolicitudes()" style="margin-top:1rem;width:100%;">🗑 Limpiar todas</button>
+            </aside>
+
+            <!-- Vista del CV seleccionado -->
+            <main class="admin-main">
+                <div id="adminEmpty" class="admin-empty">
+                    <p>Seleccioná una solicitud de la lista para previsualizar el CV.</p>
+                </div>
+
+                <div id="adminCVArea" class="hidden">
+                    <div class="admin-toolbar">
+                        <div class="template-switcher">
+                            <span>Plantilla:</span>
+                            <button type="button" class="tpl-btn active" data-tpl="moderno" onclick="adminCambiarPlantilla('moderno')">Moderno</button>
+                            <button type="button" class="tpl-btn" data-tpl="clasico" onclick="adminCambiarPlantilla('clasico')">Clásico</button>
+                            <button type="button" class="tpl-btn" data-tpl="ejecutivo" onclick="adminCambiarPlantilla('ejecutivo')">Ejecutivo</button>
+                            <button type="button" class="tpl-btn" data-tpl="minimal" onclick="adminCambiarPlantilla('minimal')">Minimal</button>
+                            <button type="button" class="tpl-btn" data-tpl="creativo" onclick="adminCambiarPlantilla('creativo')">Creativo</button>
+                        </div>
+                        <div class="cv-actions">
+                            <button type="button" class="btn-primary" onclick="adminDescargarPDF()">📥 Descargar PDF</button>
+                            <button type="button" class="btn-whatsapp" onclick="adminEnviarWhatsApp()">📱 Enviar por WhatsApp</button>
+                        </div>
+                    </div>
+
+                    <div class="cv-preview-wrapper">
+                        <div id="adminCvPreview" class="cv-document template-moderno"></div>
+                    </div>
+
+                    <div class="admin-meta" id="adminMeta"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal login admin -->
+    <div id="adminLoginModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Acceso Administración</h3>
+            <p>Ingresá la contraseña de administrador</p>
+            <input type="password" id="adminPassword" placeholder="Contraseña" autocomplete="off">
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="cerrarLoginAdmin()">Cancelar</button>
+                <button type="button" class="btn-primary" onclick="verificarAdmin()">Ingresar</button>
+            </div>
+            <p class="modal-hint">Contraseña por defecto: <code>lbvadmin</code></p>
+        </div>
     </div>
 
     <script src="script.js"></script>

@@ -1,5 +1,7 @@
-// LBV RRHH - Generador de CV
-// Estado global de la aplicación
+
+// LBV RRHH - Generador de CV v3 (Cliente + Admin)
+const ADMIN_PASSWORD = 'lbvadmin';
+const STORAGE_KEY = 'lbv_solicitudes';
 
 const state = {
     currentStep: 1,
@@ -8,27 +10,131 @@ const state = {
     comprobanteData: null,
     comprobanteName: null,
     experiencias: [],
-    estudios: [],
-    cursos: []
+    estudiosSuperiores: [],
+    estudiosSecundarios: [],
+    cursos: [],
+    selectedTemplate: 'moderno',
+    // Admin
+    currentSolicitud: null,
+    adminTemplate: 'moderno'
 };
 
-// Inicialización
+const SKILL_EXAMPLES = [
+    { cat: 'Actitud y soft skills', items: [
+        'Trabajo en equipo', 'Responsabilidad', 'Puntualidad', 'Proactividad',
+        'Comunicación efectiva', 'Adaptabilidad', 'Orientación al cliente',
+        'Resolución de problemas', 'Organización', 'Compromiso'
+    ]},
+    { cat: 'Habilidades generales', items: [
+        'Atención al público', 'Manejo de caja', 'Archivo y documentación',
+        'Gestión de agendas', 'Redacción de informes', 'Atención telefónica',
+        'Ventas', 'Cobranza', 'Inventario', 'Logística básica'
+    ]},
+    { cat: 'Ofimática y digital', items: [
+        'Microsoft Word', 'Microsoft Excel', 'PowerPoint', 'Google Docs',
+        'Correo electrónico', 'Redes sociales', 'Navegación web'
+    ]}
+];
+
+const COMPETENCY_MAP = {
+    'trabajo en equipo': 'Capacidad de trabajo colaborativo y construcción de relaciones interpersonales efectivas',
+    'responsabilidad': 'Alto sentido de la responsabilidad y cumplimiento de objetivos',
+    'puntualidad': 'Rigor en el cumplimiento de horarios y plazos establecidos',
+    'proactividad': 'Actitud proactiva orientada a la mejora continua y anticipación de necesidades',
+    'comunicación efectiva': 'Habilidades de comunicación clara, asertiva y orientada a resultados',
+    'adaptabilidad': 'Flexibilidad y capacidad de adaptación a entornos cambiantes',
+    'orientación al cliente': 'Fuerte orientación al cliente y a la excelencia en el servicio',
+    'resolución de problemas': 'Capacidad analítica para la identificación y resolución de problemas',
+    'organización': 'Excelente organización personal y gestión eficiente del tiempo',
+    'compromiso': 'Compromiso con los valores y objetivos de la organización',
+    'atención al público': 'Destreza en la atención al público y gestión de la experiencia del cliente',
+    'manejo de caja': 'Experiencia en manejo de caja, control de efectivo y conciliación',
+    'archivo y documentación': 'Orden y precisión en la gestión documental y archivo',
+    'gestión de agendas': 'Organización de agendas, coordinación de reuniones y seguimiento de tareas',
+    'redacción de informes': 'Capacidad de redacción clara y estructurada de informes y reportes',
+    'atención telefónica': 'Habilidad en atención telefónica profesional y gestión de consultas',
+    'ventas': 'Orientación comercial y habilidades de venta consultiva',
+    'cobranza': 'Experiencia en gestión de cobranza y seguimiento de cuentas por cobrar',
+    'inventario': 'Control de inventarios y gestión de stock',
+    'logística básica': 'Conocimientos de logística operativa y coordinación de entregas',
+    'microsoft word': 'Dominio de Microsoft Word para elaboración de documentos profesionales',
+    'microsoft excel': 'Manejo avanzado de Microsoft Excel (fórmulas, tablas dinámicas y análisis de datos)',
+    'powerpoint': 'Elaboración de presentaciones efectivas con PowerPoint',
+    'google docs': 'Manejo de Google Workspace (Docs, Sheets, Drive)',
+    'correo electrónico': 'Gestión profesional de correo electrónico y comunicación digital',
+    'redes sociales': 'Manejo de redes sociales con fines profesionales y de comunicación',
+    'navegación web': 'Competencia digital y búsqueda efectiva de información en internet',
+    'liderazgo': 'Liderazgo de equipos y capacidad de motivación hacia el logro de objetivos',
+    'negociación': 'Habilidades de negociación y búsqueda de acuerdos win-win',
+    'creatividad': 'Pensamiento creativo e innovador orientado a soluciones',
+    'trabajo bajo presión': 'Capacidad de desempeño efectivo bajo presión y en contextos de alta demanda'
+};
+
 document.addEventListener('DOMContentLoaded', () => {
-    // Agregar una experiencia y un estudio por defecto
     addExperiencia();
-    addEstudio();
+    addEstudioSuperior();
+    addEstudioSecundario();
+    renderSkillExamples();
     
-    // Listeners de archivos
     document.getElementById('photoInput').addEventListener('change', handlePhotoUpload);
     document.getElementById('comprobanteInput').addEventListener('change', handleComprobanteUpload);
     
+    // Enter en password admin
+    document.getElementById('adminPassword')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') verificarAdmin();
+    });
+
+    // Si hay ?admin=1 en la URL, mostrar login
+    if (new URLSearchParams(location.search).has('admin')) {
+        mostrarLoginAdmin();
+    }
+
     updateProgress();
 });
 
-// Navegación entre pasos
+function renderSkillExamples() {
+    const container = document.getElementById('skillExamples');
+    let html = '';
+    SKILL_EXAMPLES.forEach(group => {
+        html += `<span class="skill-chip category">${group.cat}</span>`;
+        group.items.forEach(item => {
+            html += `<button type="button" class="skill-chip" onclick="addSkill('${item.replace(/'/g, "\\'")}')">${item}</button>`;
+        });
+    });
+    container.innerHTML = html;
+}
+
+function addSkill(skill) {
+    const ta = document.getElementById('habilidades');
+    const current = ta.value.trim();
+    const list = current ? current.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean) : [];
+    if (!list.some(s => s.toLowerCase() === skill.toLowerCase())) {
+        list.push(skill);
+        ta.value = list.join(', ');
+    }
+}
+
+function addToField(fieldId, text) {
+    const ta = document.getElementById(fieldId);
+    const current = ta.value.trim();
+    if (current) {
+        if (!current.toLowerCase().includes(text.toLowerCase())) {
+            ta.value = current + ', ' + text;
+        }
+    } else {
+        ta.value = text;
+    }
+}
+
+function selectTemplate(name) {
+    state.selectedTemplate = name;
+    document.querySelectorAll('.template-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.template === name);
+    });
+}
+
 function nextStep(fromStep) {
     if (!validateStep(fromStep)) return;
-    
     document.getElementById(`step${fromStep}`).classList.remove('active');
     state.currentStep = fromStep + 1;
     document.getElementById(`step${state.currentStep}`).classList.add('active');
@@ -47,26 +153,20 @@ function prevStep(fromStep) {
 function updateProgress() {
     const percent = (state.currentStep / state.totalSteps) * 100;
     document.getElementById('progressFill').style.width = `${percent}%`;
-    
     document.querySelectorAll('.step-indicator').forEach(el => {
         const step = parseInt(el.dataset.step);
         el.classList.remove('active', 'completed');
-        if (step === state.currentStep) {
-            el.classList.add('active');
-        } else if (step < state.currentStep) {
-            el.classList.add('completed');
-        }
+        if (step === state.currentStep) el.classList.add('active');
+        else if (step < state.currentStep) el.classList.add('completed');
     });
 }
 
-// Validaciones
 function validateStep(step) {
     if (step === 1) {
         const nombre = document.getElementById('nombre').value.trim();
         const email = document.getElementById('email').value.trim();
         const telefono = document.getElementById('telefono').value.trim();
         const puesto = document.getElementById('puesto').value.trim();
-        
         if (!nombre || !email || !telefono || !puesto) {
             alert('Por favor completá todos los campos obligatorios (marcados con *).');
             return false;
@@ -77,7 +177,6 @@ function validateStep(step) {
         }
         return true;
     }
-    
     if (step === 4) {
         const objetivo = document.getElementById('objetivo').value.trim();
         if (!objetivo) {
@@ -86,7 +185,6 @@ function validateStep(step) {
         }
         return true;
     }
-    
     if (step === 5) {
         if (!state.comprobanteData) {
             alert('Debés adjuntar el comprobante de pago para continuar.');
@@ -94,59 +192,47 @@ function validateStep(step) {
         }
         return true;
     }
-    
     return true;
 }
 
-// Foto
 function handlePhotoUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
     if (file.size > 5 * 1024 * 1024) {
         alert('La imagen no debe superar los 5MB.');
         return;
     }
-    
     const reader = new FileReader();
     reader.onload = (ev) => {
         state.photoData = ev.target.result;
-        const preview = document.getElementById('photoPreview');
-        preview.innerHTML = `<img src="${state.photoData}" alt="Foto de perfil">`;
+        document.getElementById('photoPreview').innerHTML = `<img src="${state.photoData}" alt="Foto de perfil">`;
     };
     reader.readAsDataURL(file);
 }
 
-// Comprobante de pago
 function handleComprobanteUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
     if (file.size > 5 * 1024 * 1024) {
         alert('El archivo no debe superar los 5MB.');
         return;
     }
-    
     const reader = new FileReader();
     reader.onload = (ev) => {
         state.comprobanteData = ev.target.result;
         state.comprobanteName = file.name;
-        
         const preview = document.getElementById('comprobantePreview');
         preview.classList.add('has-file');
         document.getElementById('comprobanteName').textContent = file.name;
-        
-        // Habilitar botón generar
-        document.getElementById('btnGenerar').disabled = false;
+        document.getElementById('btnEnviar').disabled = false;
     };
     reader.readAsDataURL(file);
 }
 
-// Experiencias laborales
+// Experiencias
 function addExperiencia() {
     const id = Date.now() + Math.random();
     state.experiencias.push({ id });
-    
     const container = document.getElementById('experienciasContainer');
     const div = document.createElement('div');
     div.className = 'dynamic-item';
@@ -163,8 +249,12 @@ function addExperiencia() {
                 <input type="text" class="exp-puesto" placeholder="Tu cargo">
             </div>
             <div class="form-group">
-                <label>Año / Período *</label>
-                <input type="text" class="exp-anio" placeholder="Ej: 2020 - 2023 o 2022">
+                <label>Año de inicio *</label>
+                <input type="text" class="exp-inicio" placeholder="Ej: 2020 o Marzo 2020">
+            </div>
+            <div class="form-group">
+                <label>Año de fin</label>
+                <input type="text" class="exp-fin" placeholder="Ej: 2023 o Actualidad">
             </div>
             <div class="form-group full">
                 <label>Tareas y responsabilidades</label>
@@ -181,32 +271,34 @@ function removeExperiencia(id) {
         return;
     }
     state.experiencias = state.experiencias.filter(e => e.id !== id);
-    document.querySelector(`.dynamic-item[data-id="${id}"]`).remove();
+    document.querySelector(`.dynamic-item[data-id="${id}"]`)?.remove();
 }
 
-// Estudios
-function addEstudio() {
+function addEstudioSuperior() {
     const id = Date.now() + Math.random();
-    state.estudios.push({ id });
-    
-    const container = document.getElementById('estudiosContainer');
+    state.estudiosSuperiores.push({ id });
+    const container = document.getElementById('estudiosSuperioresContainer');
     const div = document.createElement('div');
     div.className = 'dynamic-item';
     div.dataset.id = id;
     div.innerHTML = `
-        <button type="button" class="remove-btn" onclick="removeEstudio(${id})" title="Eliminar">×</button>
+        <button type="button" class="remove-btn" onclick="removeEstudioSuperior(${id})" title="Eliminar">×</button>
         <div class="item-grid">
             <div class="form-group">
-                <label>Título / Carrera *</label>
+                <label>Título / Carrera</label>
                 <input type="text" class="est-titulo" placeholder="Ej: Licenciatura en Administración">
             </div>
             <div class="form-group">
-                <label>Establecimiento *</label>
+                <label>Establecimiento</label>
                 <input type="text" class="est-establecimiento" placeholder="Universidad / Instituto">
             </div>
             <div class="form-group">
-                <label>Año / Período *</label>
-                <input type="text" class="est-anio" placeholder="Ej: 2018 - 2022">
+                <label>Año de inicio</label>
+                <input type="text" class="est-inicio" placeholder="Ej: 2018">
+            </div>
+            <div class="form-group">
+                <label>Año de fin</label>
+                <input type="text" class="est-fin" placeholder="Ej: 2022 o En curso">
             </div>
             <div class="form-group">
                 <label>Estado</label>
@@ -221,20 +313,50 @@ function addEstudio() {
     container.appendChild(div);
 }
 
-function removeEstudio(id) {
-    if (state.estudios.length <= 1) {
-        alert('Debe haber al menos un estudio (podés dejarlo vacío si no corresponde).');
-        return;
-    }
-    state.estudios = state.estudios.filter(e => e.id !== id);
-    document.querySelector(`.dynamic-item[data-id="${id}"]`).remove();
+function removeEstudioSuperior(id) {
+    state.estudiosSuperiores = state.estudiosSuperiores.filter(e => e.id !== id);
+    document.querySelector(`#estudiosSuperioresContainer .dynamic-item[data-id="${id}"]`)?.remove();
 }
 
-// Cursos
+function addEstudioSecundario() {
+    const id = Date.now() + Math.random();
+    state.estudiosSecundarios.push({ id });
+    const container = document.getElementById('estudiosSecundariosContainer');
+    const div = document.createElement('div');
+    div.className = 'dynamic-item';
+    div.dataset.id = id;
+    div.innerHTML = `
+        <button type="button" class="remove-btn" onclick="removeEstudioSecundario(${id})" title="Eliminar">×</button>
+        <div class="item-grid">
+            <div class="form-group">
+                <label>Título / Orientación</label>
+                <input type="text" class="est-titulo" placeholder="Ej: Bachiller en Economía">
+            </div>
+            <div class="form-group">
+                <label>Establecimiento</label>
+                <input type="text" class="est-establecimiento" placeholder="Colegio / Escuela">
+            </div>
+            <div class="form-group">
+                <label>Año de inicio</label>
+                <input type="text" class="est-inicio" placeholder="Ej: 2012">
+            </div>
+            <div class="form-group">
+                <label>Año de fin</label>
+                <input type="text" class="est-fin" placeholder="Ej: 2017">
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function removeEstudioSecundario(id) {
+    state.estudiosSecundarios = state.estudiosSecundarios.filter(e => e.id !== id);
+    document.querySelector(`#estudiosSecundariosContainer .dynamic-item[data-id="${id}"]`)?.remove();
+}
+
 function addCurso() {
     const id = Date.now() + Math.random();
     state.cursos.push({ id });
-    
     const container = document.getElementById('cursosContainer');
     const div = document.createElement('div');
     div.className = 'dynamic-item';
@@ -261,88 +383,117 @@ function addCurso() {
 
 function removeCurso(id) {
     state.cursos = state.cursos.filter(c => c.id !== id);
-    document.querySelector(`.dynamic-item[data-id="${id}"]`).remove();
+    document.querySelector(`#cursosContainer .dynamic-item[data-id="${id}"]`)?.remove();
 }
 
-// Recolectar datos del formulario
 function getFormData() {
     const experiencias = [];
     document.querySelectorAll('#experienciasContainer .dynamic-item').forEach(item => {
         const empresa = item.querySelector('.exp-empresa').value.trim();
         const puesto = item.querySelector('.exp-puesto').value.trim();
-        const anio = item.querySelector('.exp-anio').value.trim();
+        const inicio = item.querySelector('.exp-inicio').value.trim();
+        const fin = item.querySelector('.exp-fin').value.trim();
         const tareas = item.querySelector('.exp-tareas').value.trim();
         if (empresa || puesto) {
-            experiencias.push({ empresa, puesto, anio, tareas });
+            experiencias.push({ empresa, puesto, inicio, fin, tareas });
         }
     });
-    
-    const estudios = [];
-    document.querySelectorAll('#estudiosContainer .dynamic-item').forEach(item => {
+
+    const estudiosSuperiores = [];
+    document.querySelectorAll('#estudiosSuperioresContainer .dynamic-item').forEach(item => {
         const titulo = item.querySelector('.est-titulo').value.trim();
         const establecimiento = item.querySelector('.est-establecimiento').value.trim();
-        const anio = item.querySelector('.est-anio').value.trim();
-        const estado = item.querySelector('.est-estado').value;
+        const inicio = item.querySelector('.est-inicio').value.trim();
+        const fin = item.querySelector('.est-fin').value.trim();
+        const estado = item.querySelector('.est-estado')?.value || '';
         if (titulo || establecimiento) {
-            estudios.push({ titulo, establecimiento, anio, estado });
+            estudiosSuperiores.push({ titulo, establecimiento, inicio, fin, estado });
         }
     });
-    
+
+    const estudiosSecundarios = [];
+    document.querySelectorAll('#estudiosSecundariosContainer .dynamic-item').forEach(item => {
+        const titulo = item.querySelector('.est-titulo').value.trim();
+        const establecimiento = item.querySelector('.est-establecimiento').value.trim();
+        const inicio = item.querySelector('.est-inicio').value.trim();
+        const fin = item.querySelector('.est-fin').value.trim();
+        if (titulo || establecimiento) {
+            estudiosSecundarios.push({ titulo, establecimiento, inicio, fin });
+        }
+    });
+
     const cursos = [];
     document.querySelectorAll('#cursosContainer .dynamic-item').forEach(item => {
         const nombre = item.querySelector('.cur-nombre').value.trim();
         const institucion = item.querySelector('.cur-institucion').value.trim();
         const anio = item.querySelector('.cur-anio').value.trim();
-        if (nombre) {
-            cursos.push({ nombre, institucion, anio });
-        }
+        if (nombre) cursos.push({ nombre, institucion, anio });
     });
-    
-    // Habilidades: separar por comas o saltos de línea
+
     const habilidadesRaw = document.getElementById('habilidades').value.trim();
     const habilidades = habilidadesRaw
         ? habilidadesRaw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)
         : [];
-    
+
     return {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        fecha: new Date().toISOString(),
         nombre: document.getElementById('nombre').value.trim(),
         email: document.getElementById('email').value.trim(),
         telefono: document.getElementById('telefono').value.trim(),
         ubicacion: document.getElementById('ubicacion').value.trim(),
         linkedin: document.getElementById('linkedin').value.trim(),
         puesto: document.getElementById('puesto').value.trim(),
-        resumen: document.getElementById('resumen').value.trim(),
+        resumenUsuario: document.getElementById('resumen').value.trim(),
         objetivo: document.getElementById('objetivo').value.trim(),
         idiomas: document.getElementById('idiomas').value.trim(),
         herramientas: document.getElementById('herramientas').value.trim(),
         habilidades,
         experiencias,
-        estudios,
+        estudiosSuperiores,
+        estudiosSecundarios,
         cursos,
-        photoData: state.photoData
+        photoData: state.photoData,
+        comprobanteName: state.comprobanteName,
+        template: state.selectedTemplate
     };
 }
 
-// Generar el CV
-function generarCV() {
+// ===== Guardar solicitud (cliente NO ve el CV) =====
+function enviarSolicitud() {
     if (!validateStep(5)) return;
-    
+
     const data = getFormData();
-    
-    // Guardar en localStorage por si acaso
+
+    // Guardar en localStorage
+    let solicitudes = [];
     try {
-        localStorage.setItem('lbv_cv_data', JSON.stringify({
-            ...data,
-            photoData: null, // no guardar base64 grande
-            comprobanteName: state.comprobanteName
-        }));
+        solicitudes = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     } catch (e) {}
-    
-    // Construir HTML del CV
-    const cvHtml = buildCVHtml(data);
-    document.getElementById('cvPreview').innerHTML = cvHtml;
-    
-    // Ir al paso 6
+    solicitudes.unshift(data); // más recientes primero
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(solicitudes));
+    } catch (e) {
+        // Si falla por tamaño (foto grande), guardar sin foto
+        const sinFoto = { ...data, photoData: null };
+        solicitudes[0] = sinFoto;
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(solicitudes));
+        } catch (e2) {
+            alert('Error al guardar. Intentá de nuevo o reducí el tamaño de la foto.');
+            return;
+        }
+    }
+
+    // Mostrar pantalla de éxito al cliente
+    document.getElementById('successDetails').innerHTML = `
+        <p><strong>Nombre:</strong> ${data.nombre}</p>
+        <p><strong>Email:</strong> ${data.email}</p>
+        <p><strong>Teléfono:</strong> ${data.telefono}</p>
+        <p><strong>Puesto:</strong> ${data.puesto}</p>
+        <p><strong>Comprobante:</strong> ${data.comprobanteName || 'Adjuntado'}</p>
+    `;
+
     document.getElementById('step5').classList.remove('active');
     state.currentStep = 6;
     document.getElementById('step6').classList.add('active');
@@ -350,20 +501,89 @@ function generarCV() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function buildCVHtml(data) {
-    let photoHtml = '';
-    if (data.photoData) {
-        photoHtml = `<img src="${data.photoData}" alt="Foto" class="cv-photo">`;
+// ===== IA Resumen =====
+function generarResumenIA(data) {
+    if (data.resumenUsuario && data.resumenUsuario.length > 40) {
+        return data.resumenUsuario;
     }
-    
+
+    const puesto = data.puesto || 'profesional';
+    const objetivo = data.objetivo || 'general';
+    const habilidades = data.habilidades || [];
+    const expCount = (data.experiencias || []).length;
+
+    const softSkills = [];
+    habilidades.forEach(h => {
+        const lower = h.toLowerCase();
+        if (COMPETENCY_MAP[lower] || ['trabajo en equipo','responsabilidad','proactividad','comunicación','adaptabilidad','organización','compromiso','liderazgo'].some(k => lower.includes(k))) {
+            softSkills.push(h);
+        }
+    });
+
+    let apertura = '';
+    if (expCount === 0) {
+        apertura = `Profesional orientado/a al área de ${puesto}, con sólida formación y fuerte motivación por desarrollarse en entornos dinámicos.`;
+    } else if (expCount === 1) {
+        apertura = `Profesional con experiencia en ${puesto}, caracterizado/a por su compromiso y capacidad de aprendizaje continuo.`;
+    } else {
+        apertura = `Profesional con sólida trayectoria en ${puesto}, con demostrada capacidad para aportar valor en equipos de trabajo y alcanzar objetivos.`;
+    }
+
+    let actitudes = '';
+    if (softSkills.length > 0) {
+        const destacadas = softSkills.slice(0, 4).join(', ');
+        actitudes = ` Destaca por sus competencias en ${destacadas.toLowerCase()}.`;
+    } else {
+        actitudes = ' Posee una actitud proactiva, orientada a resultados y con fuerte sentido de la responsabilidad.';
+    }
+
+    let herramientasTxt = data.herramientas ? ` Maneja herramientas como ${data.herramientas}.` : '';
+
+    let orientacion = '';
+    const objLower = (objetivo || '').toLowerCase();
+    if (objLower !== 'general' && objLower.length > 5) {
+        orientacion = ` Busca activamente oportunidades como ${objetivo}, donde pueda aplicar su experiencia y seguir creciendo profesionalmente.`;
+    } else {
+        orientacion = ' Se encuentra en búsqueda de nuevos desafíos profesionales donde pueda contribuir con su experiencia y seguir desarrollando su carrera.';
+    }
+
+    return `${apertura}${actitudes}${herramientasTxt}${orientacion}`;
+}
+
+function transformarACompetencias(habilidades) {
+    return (habilidades || []).map(h => {
+        const key = h.toLowerCase().trim();
+        if (COMPETENCY_MAP[key]) return COMPETENCY_MAP[key];
+        for (const [k, v] of Object.entries(COMPETENCY_MAP)) {
+            if (key.includes(k) || k.includes(key)) return v;
+        }
+        return h.charAt(0).toUpperCase() + h.slice(1);
+    });
+}
+
+function formatPeriodo(inicio, fin) {
+    if (!inicio && !fin) return '';
+    if (inicio && fin) return `${inicio} – ${fin}`;
+    if (inicio) return `${inicio} – Actualidad`;
+    return fin;
+}
+
+function buildCVHtml(data) {
+    const resumen = generarResumenIA(data);
+    const competencias = transformarACompetencias(data.habilidades);
+
+    let photoHtml = data.photoData
+        ? `<img src="${data.photoData}" alt="Foto" class="cv-photo">`
+        : '';
+
     let contactParts = [];
     if (data.email) contactParts.push(`<span>✉ ${data.email}</span>`);
     if (data.telefono) contactParts.push(`<span>📱 ${data.telefono}</span>`);
     if (data.ubicacion) contactParts.push(`<span>📍 ${data.ubicacion}</span>`);
     if (data.linkedin) contactParts.push(`<span>🔗 LinkedIn</span>`);
-    
+
     let experienciasHtml = '';
-    if (data.experiencias.length > 0) {
+    if ((data.experiencias || []).length > 0) {
         experienciasHtml = `
             <div class="cv-section">
                 <h2 class="cv-section-title">Experiencia Laboral</h2>
@@ -374,7 +594,7 @@ function buildCVHtml(data) {
                                 <div class="cv-item-title">${exp.puesto || 'Puesto'}</div>
                                 <div class="cv-item-subtitle">${exp.empresa || ''}</div>
                             </div>
-                            <div class="cv-item-date">${exp.anio || ''}</div>
+                            <div class="cv-item-date">${formatPeriodo(exp.inicio, exp.fin)}</div>
                         </div>
                         ${exp.tareas ? `<div class="cv-item-desc">${exp.tareas}</div>` : ''}
                     </div>
@@ -382,29 +602,49 @@ function buildCVHtml(data) {
             </div>
         `;
     }
-    
-    let estudiosHtml = '';
-    if (data.estudios.length > 0) {
-        estudiosHtml = `
+
+    let superioresHtml = '';
+    if ((data.estudiosSuperiores || []).length > 0) {
+        superioresHtml = `
             <div class="cv-section">
-                <h2 class="cv-section-title">Formación Académica</h2>
-                ${data.estudios.map(est => `
+                <h2 class="cv-section-title">Estudios Superiores</h2>
+                ${data.estudiosSuperiores.map(est => `
                     <div class="cv-item">
                         <div class="cv-item-header">
                             <div>
                                 <div class="cv-item-title">${est.titulo || 'Título'}</div>
-                                <div class="cv-item-subtitle">${est.establecimiento || ''} ${est.estado && est.estado !== 'Completo' ? `(${est.estado})` : ''}</div>
+                                <div class="cv-item-subtitle">${est.establecimiento || ''}${est.estado && est.estado !== 'Completo' ? ` (${est.estado})` : ''}</div>
                             </div>
-                            <div class="cv-item-date">${est.anio || ''}</div>
+                            <div class="cv-item-date">${formatPeriodo(est.inicio, est.fin)}</div>
                         </div>
                     </div>
                 `).join('')}
             </div>
         `;
     }
-    
+
+    let secundariosHtml = '';
+    if ((data.estudiosSecundarios || []).length > 0) {
+        secundariosHtml = `
+            <div class="cv-section">
+                <h2 class="cv-section-title">Estudios Secundarios</h2>
+                ${data.estudiosSecundarios.map(est => `
+                    <div class="cv-item">
+                        <div class="cv-item-header">
+                            <div>
+                                <div class="cv-item-title">${est.titulo || 'Secundario'}</div>
+                                <div class="cv-item-subtitle">${est.establecimiento || ''}</div>
+                            </div>
+                            <div class="cv-item-date">${formatPeriodo(est.inicio, est.fin)}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
     let cursosHtml = '';
-    if (data.cursos.length > 0) {
+    if ((data.cursos || []).length > 0) {
         cursosHtml = `
             <div class="cv-section">
                 <h2 class="cv-section-title">Cursos y Certificaciones</h2>
@@ -422,52 +662,34 @@ function buildCVHtml(data) {
             </div>
         `;
     }
-    
-    let habilidadesHtml = '';
-    if (data.habilidades.length > 0) {
-        habilidadesHtml = `
+
+    let competenciasHtml = '';
+    if (competencias.length > 0) {
+        competenciasHtml = `
             <div class="cv-section">
-                <h2 class="cv-section-title">Habilidades</h2>
+                <h2 class="cv-section-title">Competencias</h2>
                 <div class="cv-skills-list">
-                    ${data.habilidades.map(h => `<span class="cv-skill-tag">${h}</span>`).join('')}
+                    ${competencias.map(c => `<span class="cv-skill-tag">${c}</span>`).join('')}
                 </div>
             </div>
         `;
     }
-    
-    let idiomasHtml = '';
-    if (data.idiomas) {
-        idiomasHtml = `
-            <div class="cv-section">
-                <h2 class="cv-section-title">Idiomas</h2>
-                <div class="cv-item-desc">${data.idiomas}</div>
-            </div>
-        `;
-    }
-    
-    let herramientasHtml = '';
-    if (data.herramientas) {
-        herramientasHtml = `
-            <div class="cv-section">
-                <h2 class="cv-section-title">Herramientas y Software</h2>
-                <div class="cv-item-desc">${data.herramientas}</div>
-            </div>
-        `;
-    }
-    
-    let resumenHtml = data.resumen ? `<div class="cv-resumen">${data.resumen}</div>` : '';
-    
-    // Adaptación según objetivo (simple)
-    let estiloNota = '';
-    const objLower = (data.objetivo || '').toLowerCase();
-    if (objLower.includes('general') || objLower === 'general') {
-        // estilo general ya aplicado
-    } else if (objLower.length > 5) {
-        estiloNota = `<p style="font-size:8pt;color:#718096;margin-bottom:0.75rem;font-style:italic;">CV orientado a: ${data.objetivo}</p>`;
-    }
-    
+
+    let idiomasHtml = data.idiomas ? `
+        <div class="cv-section">
+            <h2 class="cv-section-title">Idiomas</h2>
+            <div class="cv-item-desc">${data.idiomas}</div>
+        </div>
+    ` : '';
+
+    let herramientasHtml = data.herramientas ? `
+        <div class="cv-section">
+            <h2 class="cv-section-title">Herramientas y Software</h2>
+            <div class="cv-item-desc">${data.herramientas}</div>
+        </div>
+    ` : '';
+
     return `
-        ${estiloNota}
         <div class="cv-header">
             ${photoHtml}
             <div class="cv-header-info">
@@ -476,67 +698,166 @@ function buildCVHtml(data) {
                 <div class="cv-contact">${contactParts.join('')}</div>
             </div>
         </div>
-        ${resumenHtml}
+        <div class="cv-resumen">${resumen}</div>
         ${experienciasHtml}
-        ${estudiosHtml}
+        ${superioresHtml}
+        ${secundariosHtml}
         ${cursosHtml}
-        ${habilidadesHtml}
+        ${competenciasHtml}
         ${idiomasHtml}
         ${herramientasHtml}
     `;
 }
 
-// Descargar PDF
-function descargarPDF() {
-    const element = document.getElementById('cvPreview');
-    const data = getFormData();
-    const nombreArchivo = `CV_${(data.nombre || 'Curriculum').replace(/\s+/g, '_')}.pdf`;
-    
-    const opt = {
-        margin:       [8, 8, 8, 8],
-        filename:     nombreArchivo,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-    
-    // Mostrar indicador de carga
-    const btn = event?.target || document.querySelector('.cv-actions .btn-primary');
-    const originalText = btn ? btn.textContent : '';
-    if (btn) {
-        btn.textContent = 'Generando PDF...';
-        btn.disabled = true;
+// ========== ADMIN ==========
+function mostrarLoginAdmin() {
+    document.getElementById('adminLoginModal').classList.remove('hidden');
+    document.getElementById('adminPassword').value = '';
+    document.getElementById('adminPassword').focus();
+}
+
+function cerrarLoginAdmin() {
+    document.getElementById('adminLoginModal').classList.add('hidden');
+}
+
+function verificarAdmin() {
+    const pass = document.getElementById('adminPassword').value;
+    if (pass === ADMIN_PASSWORD) {
+        cerrarLoginAdmin();
+        abrirAdmin();
+    } else {
+        alert('Contraseña incorrecta.');
     }
-    
+}
+
+function abrirAdmin() {
+    document.getElementById('clientApp').classList.add('hidden');
+    document.getElementById('adminApp').classList.remove('hidden');
+    cargarListaSolicitudes();
+}
+
+function cerrarAdmin() {
+    document.getElementById('adminApp').classList.add('hidden');
+    document.getElementById('clientApp').classList.remove('hidden');
+    state.currentSolicitud = null;
+}
+
+function getSolicitudes() {
+    try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch (e) {
+        return [];
+    }
+}
+
+function cargarListaSolicitudes() {
+    const lista = document.getElementById('listaSolicitudes');
+    const solicitudes = getSolicitudes();
+
+    if (solicitudes.length === 0) {
+        lista.innerHTML = '<p class="empty-msg">No hay solicitudes todavía.</p>';
+        return;
+    }
+
+    lista.innerHTML = solicitudes.map(s => {
+        const fecha = s.fecha ? new Date(s.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        return `
+            <div class="solicitud-item ${state.currentSolicitud?.id === s.id ? 'active' : ''}" onclick="seleccionarSolicitud('${s.id}')">
+                <div class="nombre">${s.nombre || 'Sin nombre'}</div>
+                <div class="meta">${s.puesto || ''} · ${fecha}</div>
+                <div class="meta">${s.telefono || ''} · ${s.comprobanteName ? '✓ Pago' : ''}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function seleccionarSolicitud(id) {
+    const solicitudes = getSolicitudes();
+    const s = solicitudes.find(x => x.id === id);
+    if (!s) return;
+
+    state.currentSolicitud = s;
+    state.adminTemplate = s.template || 'moderno';
+
+    document.getElementById('adminEmpty').classList.add('hidden');
+    document.getElementById('adminCVArea').classList.remove('hidden');
+
+    // Actualizar botones plantilla
+    document.querySelectorAll('#adminCVArea .tpl-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tpl === state.adminTemplate);
+    });
+
+    renderAdminCV();
+    cargarListaSolicitudes(); // refrescar active
+
+    // Meta info
+    const fecha = s.fecha ? new Date(s.fecha).toLocaleString('es-AR') : '';
+    document.getElementById('adminMeta').innerHTML = `
+        <p><strong>ID:</strong> ${s.id}</p>
+        <p><strong>Fecha de envío:</strong> ${fecha}</p>
+        <p><strong>Comprobante:</strong> ${s.comprobanteName || 'No especificado'}</p>
+        <p><strong>Objetivo del CV:</strong> ${s.objetivo || '—'}</p>
+        <p><strong>Email:</strong> ${s.email || '—'}</p>
+    `;
+}
+
+function renderAdminCV() {
+    if (!state.currentSolicitud) return;
+    const data = { ...state.currentSolicitud, template: state.adminTemplate };
+    const html = buildCVHtml(data);
+    const preview = document.getElementById('adminCvPreview');
+    preview.innerHTML = html;
+    preview.className = `cv-document template-${state.adminTemplate}`;
+}
+
+function adminCambiarPlantilla(nombre) {
+    state.adminTemplate = nombre;
+    document.querySelectorAll('#adminCVArea .tpl-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tpl === nombre);
+    });
+    renderAdminCV();
+}
+
+function adminDescargarPDF() {
+    if (!state.currentSolicitud) return;
+    const element = document.getElementById('adminCvPreview');
+    const data = state.currentSolicitud;
+    const nombreArchivo = `CV_${(data.nombre || 'Curriculum').replace(/\s+/g, '_')}.pdf`;
+
+    const opt = {
+        margin: [8, 8, 8, 8],
+        filename: nombreArchivo,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    const btn = document.querySelector('#adminCVArea .btn-primary');
+    const originalText = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = 'Generando PDF...'; btn.disabled = true; }
+
     html2pdf().set(opt).from(element).save().then(() => {
-        if (btn) {
-            btn.textContent = originalText;
-            btn.disabled = false;
-        }
+        if (btn) { btn.textContent = originalText; btn.disabled = false; }
     }).catch(err => {
         console.error(err);
-        alert('Hubo un error al generar el PDF. Intentá de nuevo.');
-        if (btn) {
-            btn.textContent = originalText;
-            btn.disabled = false;
-        }
+        alert('Error al generar el PDF.');
+        if (btn) { btn.textContent = originalText; btn.disabled = false; }
     });
 }
 
-// Enviar por WhatsApp
-function enviarWhatsApp() {
-    const data = getFormData();
+function adminEnviarWhatsApp() {
+    if (!state.currentSolicitud) return;
+    const data = state.currentSolicitud;
     let telefono = (data.telefono || '').replace(/\D/g, '');
-    
+
     if (!telefono) {
-        alert('No se encontró un número de teléfono en los datos personales.');
+        alert('No hay número de teléfono en esta solicitud.');
         return;
     }
-    
-    // Normalizar número argentino (si empieza con 0 o 15, etc.)
+
     if (telefono.startsWith('54')) {
-        // ya tiene código de país
+        // ok
     } else if (telefono.startsWith('9') && telefono.length >= 10) {
         telefono = '54' + telefono;
     } else if (telefono.startsWith('15')) {
@@ -546,32 +867,29 @@ function enviarWhatsApp() {
     } else {
         telefono = '54' + telefono;
     }
-    
+
     const mensaje = encodeURIComponent(
-        `Hola ${data.nombre || ''}! 👋\n\nTe envío mi Curriculum Vitae generado con LBV RRHH.\n\nPor favor adjuntá el archivo PDF que descargaste.\n\n¡Gracias!`
+        `Hola ${data.nombre || ''}! 👋\n\nTe enviamos tu Curriculum Vitae profesional generado por LBV RRHH.\n\nPor favor adjuntá el archivo PDF que descargaste.\n\n¡Saludos!`
     );
-    
-    // Primero descargar el PDF automáticamente
-    descargarPDF();
-    
-    // Luego abrir WhatsApp después de un breve delay
+
+    // Descargar primero
+    adminDescargarPDF();
+
     setTimeout(() => {
-        const url = `https://wa.me/${telefono}?text=${mensaje}`;
-        window.open(url, '_blank');
-        
+        window.open(`https://wa.me/${telefono}?text=${mensaje}`, '_blank');
         alert(
-            'Se descargó el PDF de tu CV.\n\n' +
-            'Se abrió WhatsApp. Adjuntá manualmente el archivo PDF descargado en el chat.\n\n' +
-            '(Los navegadores no permiten adjuntar archivos automáticamente por seguridad.)'
+            'Se descargó el PDF.\n\n' +
+            'Se abrió WhatsApp con el contacto del cliente.\n' +
+            'Adjuntá manualmente el archivo PDF en el chat.'
         );
     }, 1500);
 }
 
-// Volver a editar
-function volverAEditar() {
-    document.getElementById('step6').classList.remove('active');
-    state.currentStep = 1;
-    document.getElementById('step1').classList.add('active');
-    updateProgress();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+function limpiarTodasSolicitudes() {
+    if (!confirm('¿Seguro que querés eliminar TODAS las solicitudes? Esta acción no se puede deshacer.')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    state.currentSolicitud = null;
+    document.getElementById('adminCVArea').classList.add('hidden');
+    document.getElementById('adminEmpty').classList.remove('hidden');
+    cargarListaSolicitudes();
 }

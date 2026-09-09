@@ -7,6 +7,7 @@ const state = {
     currentStep: 1,
     totalSteps: 6,
     photoData: null,
+    photoPos: { x: 50, y: 50, scale: 1 },
     comprobanteData: null,
     comprobanteName: null,
     experiencias: [],
@@ -205,9 +206,126 @@ function handlePhotoUpload(e) {
     const reader = new FileReader();
     reader.onload = (ev) => {
         state.photoData = ev.target.result;
-        document.getElementById('photoPreview').innerHTML = `<img src="${state.photoData}" alt="Foto de perfil">`;
+        state.photoPos = { x: 50, y: 50, scale: 1 };
+        renderPhotoPreview();
+        document.getElementById('photoControls').classList.remove('hidden');
+        initPhotoDrag();
     };
     reader.readAsDataURL(file);
+}
+
+function renderPhotoPreview() {
+    const preview = document.getElementById('photoPreview');
+    if (!state.photoData) return;
+    preview.classList.add('has-photo');
+    preview.innerHTML = `<img id="photoImg" src="${state.photoData}" alt="Foto de perfil" style="object-position: ${state.photoPos.x}% ${state.photoPos.y}%; transform: scale(${state.photoPos.scale});">`;
+}
+
+function applyPhotoTransform() {
+    const img = document.getElementById('photoImg');
+    if (!img) return;
+    img.style.objectPosition = `${state.photoPos.x}% ${state.photoPos.y}%`;
+    img.style.transform = `scale(${state.photoPos.scale})`;
+}
+
+function nudgePhoto(dx, dy) {
+    state.photoPos.x = Math.max(0, Math.min(100, state.photoPos.x + dx));
+    state.photoPos.y = Math.max(0, Math.min(100, state.photoPos.y + dy));
+    applyPhotoTransform();
+}
+
+function zoomPhoto(delta) {
+    state.photoPos.scale = Math.max(1, Math.min(2.5, +(state.photoPos.scale + delta).toFixed(2)));
+    applyPhotoTransform();
+}
+
+function resetPhotoPos() {
+    state.photoPos = { x: 50, y: 50, scale: 1 };
+    applyPhotoTransform();
+}
+
+function initPhotoDrag() {
+    const preview = document.getElementById('photoPreview');
+    if (!preview || preview._dragBound) return;
+    preview._dragBound = true;
+
+    let dragging = false;
+    let lastX = 0, lastY = 0;
+
+    const onStart = (clientX, clientY) => {
+        dragging = true;
+        lastX = clientX;
+        lastY = clientY;
+    };
+    const onMove = (clientX, clientY) => {
+        if (!dragging) return;
+        const dx = clientX - lastX;
+        const dy = clientY - lastY;
+        lastX = clientX;
+        lastY = clientY;
+        // Drag opposite direction moves the focal point
+        state.photoPos.x = Math.max(0, Math.min(100, state.photoPos.x - dx * 0.35));
+        state.photoPos.y = Math.max(0, Math.min(100, state.photoPos.y - dy * 0.35));
+        applyPhotoTransform();
+    };
+    const onEnd = () => { dragging = false; };
+
+    preview.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        onStart(e.clientX, e.clientY);
+    });
+    window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', onEnd);
+
+    preview.addEventListener('touchstart', (e) => {
+        if (e.touches[0]) onStart(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    preview.addEventListener('touchmove', (e) => {
+        if (e.touches[0]) {
+            e.preventDefault();
+            onMove(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    }, { passive: false });
+    preview.addEventListener('touchend', onEnd);
+}
+
+/** Genera dataURL de la foto ya recortada/centrada en círculo (para el CV) */
+function getCroppedPhotoDataURL() {
+    if (!state.photoData) return null;
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const size = 400;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            // Clip circle
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+
+            const scale = state.photoPos.scale || 1;
+            const ox = (state.photoPos.x ?? 50) / 100;
+            const oy = (state.photoPos.y ?? 50) / 100;
+
+            // Cover-style draw with object-position
+            const iw = img.naturalWidth;
+            const ih = img.naturalHeight;
+            const base = Math.max(size / iw, size / ih) * scale;
+            const dw = iw * base;
+            const dh = ih * base;
+            const dx = (size - dw) * ox;
+            const dy = (size - dh) * oy;
+
+            ctx.drawImage(img, dx, dy, dw, dh);
+            resolve(canvas.toDataURL('image/jpeg', 0.92));
+        };
+        img.onerror = () => resolve(state.photoData);
+        img.src = state.photoData;
+    });
 }
 
 function handleComprobanteUpload(e) {
@@ -460,21 +578,28 @@ function getFormData() {
 }
 
 // ===== Guardar solicitud (cliente NO ve el CV) =====
-function enviarSolicitud() {
+async function enviarSolicitud() {
     if (!validateStep(5)) return;
 
     const data = getFormData();
+    // Aplicar recorte/centrado de la foto
+    if (state.photoData) {
+        try {
+            data.photoData = await getCroppedPhotoDataURL();
+        } catch (e) {
+            data.photoData = state.photoData;
+        }
+    }
 
     // Guardar en localStorage
     let solicitudes = [];
     try {
         solicitudes = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     } catch (e) {}
-    solicitudes.unshift(data); // más recientes primero
+    solicitudes.unshift(data);
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(solicitudes));
     } catch (e) {
-        // Si falla por tamaño (foto grande), guardar sin foto
         const sinFoto = { ...data, photoData: null };
         solicitudes[0] = sinFoto;
         try {
@@ -485,7 +610,6 @@ function enviarSolicitud() {
         }
     }
 
-    // Mostrar pantalla de éxito al cliente
     document.getElementById('successDetails').innerHTML = `
         <p><strong>Nombre:</strong> ${data.nombre}</p>
         <p><strong>Email:</strong> ${data.email}</p>
@@ -520,31 +644,38 @@ function generarResumenIA(data) {
         }
     });
 
+    // Primera persona: como si el cliente hablara de sí mismo
     let apertura = '';
     if (expCount === 0) {
-        apertura = `Profesional orientado/a al área de ${puesto}, con sólida formación y fuerte motivación por desarrollarse en entornos dinámicos.`;
+        apertura = puesto && puesto !== 'profesional'
+            ? `Soy un/a profesional orientado/a al área de ${puesto}, con sólida formación y una fuerte motivación por desarrollarme en entornos dinámicos.`
+            : `Soy un/a profesional con sólida formación y una fuerte motivación por desarrollarme en entornos dinámicos.`;
     } else if (expCount === 1) {
-        apertura = `Profesional con experiencia en ${puesto}, caracterizado/a por su compromiso y capacidad de aprendizaje continuo.`;
+        apertura = puesto && puesto !== 'profesional'
+            ? `Cuento con experiencia en ${puesto} y me caracterizo por mi compromiso y capacidad de aprendizaje continuo.`
+            : `Cuento con experiencia laboral y me caracterizo por mi compromiso y capacidad de aprendizaje continuo.`;
     } else {
-        apertura = `Profesional con sólida trayectoria en ${puesto}, con demostrada capacidad para aportar valor en equipos de trabajo y alcanzar objetivos.`;
+        apertura = puesto && puesto !== 'profesional'
+            ? `Cuento con una sólida trayectoria en ${puesto} y con demostrada capacidad para aportar valor en equipos de trabajo y alcanzar objetivos.`
+            : `Cuento con una sólida trayectoria profesional y con demostrada capacidad para aportar valor en equipos de trabajo y alcanzar objetivos.`;
     }
 
     let actitudes = '';
     if (softSkills.length > 0) {
         const destacadas = softSkills.slice(0, 4).join(', ');
-        actitudes = ` Destaca por sus competencias en ${destacadas.toLowerCase()}.`;
+        actitudes = ` Destaco por mis competencias en ${destacadas.toLowerCase()}.`;
     } else {
-        actitudes = ' Posee una actitud proactiva, orientada a resultados y con fuerte sentido de la responsabilidad.';
+        actitudes = ' Me defino por una actitud proactiva, orientada a resultados y con un fuerte sentido de la responsabilidad.';
     }
 
-    let herramientasTxt = data.herramientas ? ` Maneja herramientas como ${data.herramientas}.` : '';
+    let herramientasTxt = data.herramientas ? ` Manejo herramientas como ${data.herramientas}.` : '';
 
     let orientacion = '';
     const objLower = (objetivo || '').toLowerCase();
     if (objLower !== 'general' && objLower.length > 5) {
-        orientacion = ` Busca activamente oportunidades como ${objetivo}, donde pueda aplicar su experiencia y seguir creciendo profesionalmente.`;
+        orientacion = ` Busco activamente oportunidades como ${objetivo}, donde pueda aplicar mi experiencia y seguir creciendo profesionalmente.`;
     } else {
-        orientacion = ' Se encuentra en búsqueda de nuevos desafíos profesionales donde pueda contribuir con su experiencia y seguir desarrollando su carrera.';
+        orientacion = ' Me encuentro en búsqueda de nuevos desafíos profesionales donde pueda contribuir con mi experiencia y seguir desarrollando mi carrera.';
     }
 
     return `${apertura}${actitudes}${herramientasTxt}${orientacion}`;
@@ -668,9 +799,9 @@ function buildCVHtml(data) {
         competenciasHtml = `
             <div class="cv-section">
                 <h2 class="cv-section-title">Competencias</h2>
-                <div class="cv-skills-list">
-                    ${competencias.map(c => `<span class="cv-skill-tag">${c}</span>`).join('')}
-                </div>
+                <ul class="cv-competencias-list">
+                    ${competencias.map(c => `<li>${c}</li>`).join('')}
+                </ul>
             </div>
         `;
     }

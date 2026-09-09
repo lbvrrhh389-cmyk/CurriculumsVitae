@@ -307,6 +307,9 @@
                 </div>
 
                 <div id="adminCVArea" class="hidden">
+                    <div class="admin-edit-banner">
+                        ✏️ <strong>Modo edición:</strong> hacé clic en cualquier texto del CV para corregirlo. Los cambios se reflejan al descargar el PDF.
+                    </div>
                     <div class="admin-toolbar">
                         <div class="template-switcher">
                             <span>Plantilla:</span>
@@ -317,13 +320,14 @@
                             <button type="button" class="tpl-btn" data-tpl="creativo" onclick="adminCambiarPlantilla('creativo')">Creativo</button>
                         </div>
                         <div class="cv-actions">
+                            <button type="button" class="btn-secondary" onclick="adminRestablecerCV()">↺ Restablecer texto</button>
                             <button type="button" class="btn-primary" onclick="adminDescargarPDF()">📥 Descargar PDF</button>
                             <button type="button" class="btn-whatsapp" onclick="adminEnviarWhatsApp()">📱 Enviar por WhatsApp</button>
                         </div>
                     </div>
 
                     <div class="cv-preview-wrapper">
-                        <div id="adminCvPreview" class="cv-document template-moderno"></div>
+                        <div id="adminCvPreview" class="cv-document template-moderno" contenteditable="true" spellcheck="true"></div>
                     </div>
 
                     <div class="admin-meta" id="adminMeta"></div>

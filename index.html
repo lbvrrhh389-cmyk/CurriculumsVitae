@@ -12,20 +12,22 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
-    <div class="app-container" id="clientApp">
-        <!-- Header -->
+    <div id="clientApp">
+        <!-- Header banner -->
         <header class="app-header">
-            <div class="logo-wrap">
-                <div class="logo">
-                    <span class="logo-icon">LBV</span>
-                    <span class="logo-text">RRHH</span>
+            <div class="header-inner">
+                <div class="logo-wrap">
+                    <div class="logo">
+                        <span class="logo-icon">LBV</span>
+                        <span class="logo-text">RRHH</span>
+                    </div>
                 </div>
-                <div class="logo-underline"></div>
+                <p class="tagline">Generador profesional de Curriculum Vitae</p>
+                <p class="tagline-sub">Tu perfil, con estándar de Recursos Humanos</p>
             </div>
-            <p class="tagline">Generador profesional de Curriculum Vitae</p>
-            <p class="tagline-sub">Tu perfil, con estándar de Recursos Humanos</p>
         </header>
 
+        <div class="app-container">
         <!-- Progress Bar -->
         <div class="progress-container" id="progressContainer">
             <div class="progress-bar">
@@ -50,12 +52,24 @@
                 
                 <div class="form-grid">
                     <div class="photo-upload-area">
-                        <div class="photo-preview" id="photoPreview">
+                        <div class="photo-preview" id="photoPreview" title="Arrastrá la imagen para centrarla">
                             <span class="photo-placeholder">📷</span>
                             <p>Subí tu foto</p>
                         </div>
                         <input type="file" id="photoInput" accept="image/*" hidden>
                         <button type="button" class="btn-secondary" onclick="document.getElementById('photoInput').click()">Seleccionar foto</button>
+                        <div id="photoControls" class="photo-controls hidden">
+                            <p class="photo-hint">Arrastrá la foto para centrarla</p>
+                            <div class="photo-control-row">
+                                <button type="button" class="btn-icon" onclick="nudgePhoto(0, 5)" title="Subir">↑</button>
+                                <button type="button" class="btn-icon" onclick="nudgePhoto(0, -5)" title="Bajar">↓</button>
+                                <button type="button" class="btn-icon" onclick="nudgePhoto(5, 0)" title="Izquierda">←</button>
+                                <button type="button" class="btn-icon" onclick="nudgePhoto(-5, 0)" title="Derecha">→</button>
+                                <button type="button" class="btn-icon" onclick="zoomPhoto(0.1)" title="Acercar">+</button>
+                                <button type="button" class="btn-icon" onclick="zoomPhoto(-0.1)" title="Alejar">−</button>
+                                <button type="button" class="btn-icon" onclick="resetPhotoPos()" title="Restablecer">↺</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="fields-column">
@@ -262,6 +276,7 @@
             <p>© 2026 LBV RRHH · Generador de CV profesional</p>
             <button type="button" class="admin-link" onclick="mostrarLoginAdmin()">Acceso administración</button>
         </footer>
+        </div><!-- /.app-container -->
     </div>
 
     <!-- ========== PANEL DE ADMINISTRACIÓN ========== -->

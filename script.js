@@ -17,7 +17,8 @@ const state = {
     selectedTemplate: 'moderno',
     // Admin
     currentSolicitud: null,
-    adminTemplate: 'moderno'
+    adminTemplate: 'moderno',
+    adminEdited: false
 };
 
 const SKILL_EXAMPLES = [
@@ -939,14 +940,41 @@ function renderAdminCV() {
     const preview = document.getElementById('adminCvPreview');
     preview.innerHTML = html;
     preview.className = `cv-document template-${state.adminTemplate}`;
+    preview.setAttribute('contenteditable', 'true');
+    preview.setAttribute('spellcheck', 'true');
+    state.adminEdited = false;
+    // Marcar que hubo edición manual
+    preview.oninput = () => { state.adminEdited = true; };
+}
+
+function adminRestablecerCV() {
+    if (!state.currentSolicitud) return;
+    if (state.adminEdited && !confirm('Se perderán las correcciones hechas a mano. ¿Restablecer el texto original?')) {
+        return;
+    }
+    renderAdminCV();
 }
 
 function adminCambiarPlantilla(nombre) {
+    if (state.adminEdited) {
+        const ok = confirm(
+            'Cambiar de plantilla regenera el CV y puede borrar tus correcciones de texto.\n\n' +
+            '¿Querés continuar? (Si solo querés cambiar el estilo visual sin tocar el texto, cancelá y usá Restablecer después de anotar los cambios.)'
+        );
+        if (!ok) return;
+    }
     state.adminTemplate = nombre;
     document.querySelectorAll('#adminCVArea .tpl-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tpl === nombre);
     });
-    renderAdminCV();
+    // Solo cambia la clase visual si no hubo edición; si hubo y aceptó, regenera
+    const preview = document.getElementById('adminCvPreview');
+    if (state.adminEdited) {
+        renderAdminCV();
+    } else {
+        // Regenerar siempre al cambiar plantilla para aplicar bien los estilos de cada template
+        renderAdminCV();
+    }
 }
 
 function adminDescargarPDF() {
@@ -954,6 +982,11 @@ function adminDescargarPDF() {
     const element = document.getElementById('adminCvPreview');
     const data = state.currentSolicitud;
     const nombreArchivo = `CV_${(data.nombre || 'Curriculum').replace(/\s+/g, '_')}.pdf`;
+
+    // Quitar outline de edición temporalmente para el PDF
+    const wasEditable = element.getAttribute('contenteditable');
+    element.setAttribute('contenteditable', 'false');
+    element.classList.add('pdf-exporting');
 
     const opt = {
         margin: [8, 8, 8, 8],
@@ -964,14 +997,18 @@ function adminDescargarPDF() {
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
-    const btn = document.querySelector('#adminCVArea .btn-primary');
+    const btn = document.querySelector('#adminCVArea .cv-actions .btn-primary');
     const originalText = btn ? btn.textContent : '';
     if (btn) { btn.textContent = 'Generando PDF...'; btn.disabled = true; }
 
     html2pdf().set(opt).from(element).save().then(() => {
+        element.setAttribute('contenteditable', wasEditable || 'true');
+        element.classList.remove('pdf-exporting');
         if (btn) { btn.textContent = originalText; btn.disabled = false; }
     }).catch(err => {
         console.error(err);
+        element.setAttribute('contenteditable', wasEditable || 'true');
+        element.classList.remove('pdf-exporting');
         alert('Error al generar el PDF.');
         if (btn) { btn.textContent = originalText; btn.disabled = false; }
     });

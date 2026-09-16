@@ -653,19 +653,27 @@ async function enviarSolicitud() {
         let comprobanteUrl = null;
 
         if (firebaseReady) {
-            // Subir foto
-            if (data.photoData) {
-                photoUrl = await uploadDataUrl(`fotos/${id}.jpg`, data.photoData);
+            // Subir archivos (si falla Storage, igual guardamos los datos en Firestore)
+            try {
+                if (data.photoData) {
+                    photoUrl = await uploadDataUrl(`fotos/${id}.jpg`, data.photoData);
+                }
+            } catch (e) {
+                console.warn('No se pudo subir la foto a Storage', e);
             }
-            // Subir comprobante
-            const compInput = document.getElementById('comprobanteInput');
-            if (compInput && compInput.files && compInput.files[0]) {
-                const f = compInput.files[0];
-                const ext = (f.name.split('.').pop() || 'bin').toLowerCase();
-                comprobanteUrl = await uploadFile(`comprobantes/${id}.${ext}`, f);
+            try {
+                const compInput = document.getElementById('comprobanteInput');
+                if (compInput && compInput.files && compInput.files[0]) {
+                    const f = compInput.files[0];
+                    const ext = (f.name.split('.').pop() || 'bin').toLowerCase();
+                    comprobanteUrl = await uploadFile(`comprobantes/${id}.${ext}`, f);
+                }
+            } catch (e) {
+                console.warn('No se pudo subir el comprobante a Storage', e);
             }
 
-            const doc = {
+            // Firestore no acepta undefined: limpiamos el objeto
+            const doc = JSON.parse(JSON.stringify({
                 id,
                 fecha: new Date().toISOString(),
                 nombre: data.nombre || '',
@@ -684,13 +692,14 @@ async function enviarSolicitud() {
                 estudiosSecundarios: data.estudiosSecundarios || [],
                 cursos: data.cursos || [],
                 template: data.template || 'moderno',
-                photoUrl,
+                photoUrl: photoUrl || null,
                 photoData: null,
-                comprobanteUrl,
+                comprobanteUrl: comprobanteUrl || null,
                 comprobanteName: data.comprobanteName || null,
-            };
+            }));
 
             await db.collection('solicitudes').doc(id).set(doc);
+            console.log('Solicitud guardada en Firestore', id);
 
             document.getElementById('successDetails').innerHTML = `
                 <p><strong>Nombre:</strong> ${data.nombre}</p>
@@ -699,6 +708,7 @@ async function enviarSolicitud() {
                 <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
                 <p><strong>Comprobante:</strong> ${data.comprobanteName || 'Adjuntado'}</p>
                 <p><strong>Nº de solicitud:</strong> ${id}</p>
+                <p><strong>Guardado en:</strong> Firebase (nube)</p>
             `;
         } else {
             // Fallback localStorage (solo este dispositivo)
@@ -985,20 +995,19 @@ async function getSolicitudes() {
 
     if (firebaseReady) {
         try {
-            const snap = await db.collection('solicitudes').orderBy('fecha', 'desc').get();
-            return snap.docs.map((d) => normalizeSolicitud({ id: d.id, ...d.data() }));
-        } catch (e) {
-            console.warn('Error leyendo Firestore, reintento sin orderBy', e);
-            try {
-                const snap = await db.collection('solicitudes').get();
-                const list = snap.docs.map((d) => normalizeSolicitud({ id: d.id, ...d.data() }));
-                list.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
-                return list;
-            } catch (e2) {
-                console.error(e2);
-                alert('No se pudieron cargar las solicitudes. Revisá las reglas de Firestore.');
-                return [];
-            }
+            // Lectura simple (más estable). Ordenamos en el cliente.
+            const snap = await db.collection('solicitudes').get();
+            const list = snap.docs.map((d) => normalizeSolicitud({ id: d.id, ...d.data() }));
+            list.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+            console.log('Solicitudes leídas de Firestore:', list.length);
+            return list;
+        } catch (e2) {
+            console.error('Error leyendo Firestore', e2);
+            alert('No se pudieron cargar las solicitudes desde Firebase.\n\n' +
+                  'Revisá en la consola de Firebase → Firestore → Reglas\n' +
+                  'que permitan read/write en /solicitudes.\n\n' +
+                  (e2.message || ''));
+            return [];
         }
     }
 

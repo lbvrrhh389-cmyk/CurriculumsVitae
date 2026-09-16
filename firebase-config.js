@@ -1,20 +1,10 @@
-/**
- * LBV RRHH - Configuración Firebase
- *
- * 1) Creá un proyecto en https://console.firebase.google.com
- * 2) Agregá una app Web y copiá la config acá
- * 3) Activá Firestore (modo producción o prueba)
- * 4) Activá Storage
- * 5) Reglas: ver instrucciones al final de este archivo
- */
-window.FIREBASE_CONFIG = {
-  apiKey: "PEGAR_API_KEY",
-  authDomain: "PEGAR_PROJECT_ID.firebaseapp.com",
-  projectId: "PEGAR_PROJECT_ID",
-  storageBucket: "PEGAR_PROJECT_ID.appspot.com",
-  messagingSenderId: "PEGAR_SENDER_ID",
-  appId: "PEGAR_APP_ID"
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyB2ZtAXrFWVEeMuCVdHuDqKI2vnh2a8K18",
+  authDomain: "lbv-rrhh.firebaseapp.com",
+  projectId: "lbv-rrhh",
+  storageBucket: "lbv-rrhh.firebasestorage.app",
+  messagingSenderId: "239071862361",
+  appId: "1:239071862361:web:355154dbe23effbc579b48",
+  measurementId: "G-N6PQ1GLC7P"
 };
-
-/** true cuando la config de arriba esté completa */
-window.FIREBASE_ENABLED = !String(window.FIREBASE_CONFIG.apiKey || '').includes('PEGAR');

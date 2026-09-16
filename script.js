@@ -1,7 +1,21 @@
-
 // LBV RRHH - Generador de CV v3 (Cliente + Admin)
 const ADMIN_PASSWORD = 'lbvadmin';
-const STORAGE_KEY = 'lbv_solicitudes';
+const STORAGE_KEY = 'lbv_solicitudes'; // fallback offline
+
+// Backend Node.js – mismo origen si servís con el server, o cambiá la URL
+const API_BASE = (window.location.port === '3000' || window.location.hostname === 'localhost')
+  ? `${window.location.protocol}//${window.location.hostname}:3000`
+  : ''; // mismo host en producción
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`;
+}
+
+function adminHeaders() {
+  return {
+    'X-Admin-Key': sessionStorage.getItem('lbv_admin_key') || ADMIN_PASSWORD,
+  };
+}
 
 const state = {
     currentStep: 1,
@@ -582,51 +596,79 @@ function getFormData() {
 async function enviarSolicitud() {
     if (!validateStep(5)) return;
 
-    const data = getFormData();
-    // Aplicar recorte/centrado de la foto
-    if (state.photoData) {
-        try {
-            data.photoData = await getCroppedPhotoDataURL();
-        } catch (e) {
-            data.photoData = state.photoData;
-        }
+    const btn = document.getElementById('btnEnviar');
+    const originalText = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Enviando...';
     }
 
-    // Guardar en localStorage
-    let solicitudes = [];
     try {
-        solicitudes = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    } catch (e) {}
-    solicitudes.unshift(data);
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(solicitudes));
-    } catch (e) {
-        const sinFoto = { ...data, photoData: null };
-        solicitudes[0] = sinFoto;
+        const data = getFormData();
+
+        // Foto recortada en base64
+        if (state.photoData) {
+            try {
+                data.photoData = await getCroppedPhotoDataURL();
+            } catch (e) {
+                data.photoData = state.photoData;
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('data', JSON.stringify({
+            ...data,
+            photoData: data.photoData || null,
+        }));
+
+        // Comprobante como archivo real si está disponible
+        const compInput = document.getElementById('comprobanteInput');
+        if (compInput && compInput.files && compInput.files[0]) {
+            formData.append('comprobante', compInput.files[0]);
+        }
+
+        const res = await fetch(apiUrl('/api/solicitudes'), {
+            method: 'POST',
+            body: formData,
+        });
+
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(json.error || 'No se pudo guardar la solicitud');
+        }
+
+        // Fallback local por si el admin abre sin server
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(solicitudes));
-        } catch (e2) {
-            alert('Error al guardar. Intentá de nuevo o reducí el tamaño de la foto.');
-            return;
+            let local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            local.unshift({ ...data, id: json.id || data.id, photoData: data.photoData });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(local));
+        } catch (e) {}
+
+        document.getElementById('successDetails').innerHTML = `
+            <p><strong>Nombre:</strong> ${data.nombre}</p>
+            <p><strong>Email:</strong> ${data.email}</p>
+            <p><strong>Teléfono:</strong> ${data.telefono}</p>
+            <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
+            <p><strong>Comprobante:</strong> ${data.comprobanteName || 'Adjuntado'}</p>
+            <p><strong>Nº de solicitud:</strong> ${json.id || '—'}</p>
+        `;
+
+        document.getElementById('step5').classList.remove('active');
+        state.currentStep = 6;
+        document.getElementById('step6').classList.add('active');
+        updateProgress();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+        console.error(err);
+        alert('Error al enviar: ' + (err.message || 'revisá que el servidor Node esté corriendo'));
+    } finally {
+        if (btn) {
+            btn.disabled = !state.comprobanteData;
+            btn.textContent = originalText;
         }
     }
-
-    document.getElementById('successDetails').innerHTML = `
-        <p><strong>Nombre:</strong> ${data.nombre}</p>
-        <p><strong>Email:</strong> ${data.email}</p>
-        <p><strong>Teléfono:</strong> ${data.telefono}</p>
-        <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
-        <p><strong>Comprobante:</strong> ${data.comprobanteName || 'Adjuntado'}</p>
-    `;
-
-    document.getElementById('step5').classList.remove('active');
-    state.currentStep = 6;
-    document.getElementById('step6').classList.add('active');
-    updateProgress();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ===== IA Resumen =====
 function generarResumenIA(data) {
     if (data.resumenUsuario && data.resumenUsuario.length > 40) {
         return data.resumenUsuario;
@@ -855,6 +897,7 @@ function cerrarLoginAdmin() {
 function verificarAdmin() {
     const pass = document.getElementById('adminPassword').value;
     if (pass === ADMIN_PASSWORD) {
+        sessionStorage.setItem('lbv_admin_key', pass);
         cerrarLoginAdmin();
         abrirAdmin();
     } else {
@@ -874,7 +917,16 @@ function cerrarAdmin() {
     state.currentSolicitud = null;
 }
 
-function getSolicitudes() {
+async function getSolicitudes() {
+    try {
+        const res = await fetch(apiUrl('/api/solicitudes'), { headers: adminHeaders() });
+        if (res.ok) {
+            const data = await res.json();
+            return data.map(normalizeSolicitud);
+        }
+    } catch (e) {
+        console.warn('API no disponible, usando localStorage', e);
+    }
     try {
         return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     } catch (e) {
@@ -882,9 +934,20 @@ function getSolicitudes() {
     }
 }
 
-function cargarListaSolicitudes() {
+/** Convierte photoUrl del server en photoData usable por el CV */
+function normalizeSolicitud(s) {
+    const copy = { ...s };
+    if (!copy.photoData && copy.photoUrl) {
+        copy.photoData = apiUrl(copy.photoUrl);
+    }
+    return copy;
+}
+
+async function cargarListaSolicitudes() {
     const lista = document.getElementById('listaSolicitudes');
-    const solicitudes = getSolicitudes();
+    lista.innerHTML = '<p class="empty-msg">Cargando...</p>';
+    const solicitudes = await getSolicitudes();
+    state._solicitudesCache = solicitudes;
 
     if (solicitudes.length === 0) {
         lista.innerHTML = '<p class="empty-msg">No hay solicitudes todavía.</p>';
@@ -903,31 +966,41 @@ function cargarListaSolicitudes() {
     }).join('');
 }
 
-function seleccionarSolicitud(id) {
-    const solicitudes = getSolicitudes();
-    const s = solicitudes.find(x => x.id === id);
+async function seleccionarSolicitud(id) {
+    let s = (state._solicitudesCache || []).find(x => x.id === id);
+    if (!s) {
+        try {
+            const res = await fetch(apiUrl('/api/solicitudes/' + id), { headers: adminHeaders() });
+            if (res.ok) s = normalizeSolicitud(await res.json());
+        } catch (e) {}
+    }
+    if (!s) {
+        const all = await getSolicitudes();
+        s = all.find(x => x.id === id);
+    }
     if (!s) return;
 
-    state.currentSolicitud = s;
+    state.currentSolicitud = normalizeSolicitud(s);
     state.adminTemplate = s.template || 'moderno';
 
     document.getElementById('adminEmpty').classList.add('hidden');
     document.getElementById('adminCVArea').classList.remove('hidden');
 
-    // Actualizar botones plantilla
     document.querySelectorAll('#adminCVArea .tpl-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tpl === state.adminTemplate);
     });
 
     renderAdminCV();
-    cargarListaSolicitudes(); // refrescar active
+    cargarListaSolicitudes();
 
-    // Meta info
     const fecha = s.fecha ? new Date(s.fecha).toLocaleString('es-AR') : '';
+    const compLink = s.comprobanteUrl
+        ? `<a href="${apiUrl(s.comprobanteUrl)}" target="_blank" rel="noopener">${s.comprobanteName || 'Ver archivo'}</a>`
+        : (s.comprobanteName || 'No especificado');
     document.getElementById('adminMeta').innerHTML = `
         <p><strong>ID:</strong> ${s.id}</p>
         <p><strong>Fecha de envío:</strong> ${fecha}</p>
-        <p><strong>Comprobante:</strong> ${s.comprobanteName || 'No especificado'}</p>
+        <p><strong>Comprobante:</strong> ${compLink}</p>
         <p><strong>Objetivo del CV:</strong> ${s.objetivo || '—'}</p>
         <p><strong>Email:</strong> ${s.email || '—'}</p>
     `;
@@ -1053,9 +1126,21 @@ function adminEnviarWhatsApp() {
     }, 1500);
 }
 
-function limpiarTodasSolicitudes() {
+async function limpiarTodasSolicitudes() {
     if (!confirm('¿Seguro que querés eliminar TODAS las solicitudes? Esta acción no se puede deshacer.')) return;
-    localStorage.removeItem(STORAGE_KEY);
+    try {
+        const res = await fetch(apiUrl('/api/solicitudes'), {
+            method: 'DELETE',
+            headers: adminHeaders(),
+        });
+        if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j.error || 'Error al eliminar');
+        }
+    } catch (e) {
+        console.warn(e);
+        localStorage.removeItem(STORAGE_KEY);
+    }
     state.currentSolicitud = null;
     document.getElementById('adminCVArea').classList.add('hidden');
     document.getElementById('adminEmpty').classList.remove('hidden');

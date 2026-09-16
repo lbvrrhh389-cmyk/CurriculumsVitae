@@ -1,0 +1,29 @@
+[
+  {
+    "id": "53f7a153-e198-4c7f-87a2-17e2f4b1c4ff",
+    "fecha": "2026-09-10T02:37:04.178Z",
+    "nombre": "Ana Test",
+    "email": "ana@test.com",
+    "telefono": "11999888777",
+    "ubicacion": "CABA",
+    "linkedin": "",
+    "puesto": "Administrativa",
+    "resumenUsuario": "",
+    "objetivo": "General",
+    "idiomas": "",
+    "herramientas": "",
+    "habilidades": [
+      "Trabajo en equipo",
+      "Excel"
+    ],
+    "experiencias": [],
+    "estudiosSuperiores": [],
+    "estudiosSecundarios": [],
+    "cursos": [],
+    "template": "moderno",
+    "photoUrl": null,
+    "photoData": null,
+    "comprobanteUrl": null,
+    "comprobanteName": null
+  }
+]

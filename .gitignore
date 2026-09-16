@@ -1,1 +1,14 @@
+# Node
+node_modules/
+server/node_modules/
 
+# Datos y archivos subidos (no subir al repo)
+server/data/*.json
+server/uploads/*
+!server/uploads/.gitkeep
+!server/data/.gitkeep
+
+# Sistema
+.DS_Store
+*.log
+.env

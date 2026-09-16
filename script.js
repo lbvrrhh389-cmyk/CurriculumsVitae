@@ -1,3 +1,4 @@
+
 // LBV RRHH - Generador de CV v3 (Cliente + Admin)
 const ADMIN_PASSWORD = 'lbvadmin';
 const STORAGE_KEY = 'lbv_solicitudes'; // fallback offline local
@@ -9,10 +10,16 @@ let firebaseReady = false;
 
 function initFirebase() {
   try {
+    if (typeof firebase === 'undefined') {
+      console.error('SDK de Firebase no cargó (revisá la conexión o el bloqueo de scripts).');
+      firebaseReady = false;
+      return false;
+    }
     const cfg = window.FIREBASE_CONFIG;
     const enabled = window.FIREBASE_ENABLED === true;
     if (!enabled || !cfg || !cfg.apiKey || String(cfg.apiKey).includes('PEGAR')) {
-      console.warn('Firebase no configurado. Usando solo localStorage.');
+      console.warn('Firebase no configurado.', { enabled, cfg });
+      firebaseReady = false;
       return false;
     }
     if (!firebase.apps.length) {
@@ -21,7 +28,7 @@ function initFirebase() {
     db = firebase.firestore();
     storage = firebase.storage();
     firebaseReady = true;
-    console.log('Firebase listo');
+    console.log('Firebase listo', cfg.projectId);
     return true;
   } catch (e) {
     console.error('Error init Firebase', e);
@@ -626,24 +633,48 @@ function getFormData() {
 }
 
 // ===== Guardar solicitud (cliente NO ve el CV) =====
+async function withTimeout(promise, ms, label) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Tiempo agotado: ' + label + ' (' + ms + 'ms)')), ms);
+    });
+    try {
+        return await Promise.race([promise, timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function enviarSolicitud() {
     if (!validateStep(5)) return;
 
     const btn = document.getElementById('btnEnviar');
     const originalText = btn ? btn.textContent : '';
+    const setStatus = (t) => { if (btn) btn.textContent = t; };
+
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Enviando...';
+        setStatus('Enviando...');
     }
 
     try {
         if (!firebaseReady) initFirebase();
+        if (!firebaseReady) {
+            alert(
+              'Firebase no está activo.\\n\\n' +
+              'En la consola del navegador (F12) debería decir \"Firebase listo\".\\n' +
+              'Si no aparece, revisá firebase-config.js y que los scripts de Firebase carguen.'
+            );
+            return;
+        }
 
+        setStatus('Preparando datos...');
         const data = getFormData();
         if (state.photoData) {
             try {
-                data.photoData = await getCroppedPhotoDataURL();
+                data.photoData = await withTimeout(getCroppedPhotoDataURL(), 10000, 'recortar foto');
             } catch (e) {
+                console.warn(e);
                 data.photoData = state.photoData;
             }
         }
@@ -652,79 +683,92 @@ async function enviarSolicitud() {
         let photoUrl = null;
         let comprobanteUrl = null;
 
-        if (firebaseReady) {
-            // Subir archivos (si falla Storage, igual guardamos los datos en Firestore)
-            try {
-                if (data.photoData) {
-                    photoUrl = await uploadDataUrl(`fotos/${id}.jpg`, data.photoData);
-                }
-            } catch (e) {
-                console.warn('No se pudo subir la foto a Storage', e);
+        // 1) Primero guardar datos en Firestore (lo más importante)
+        setStatus('Guardando en Firebase...');
+        const doc = JSON.parse(JSON.stringify({
+            id,
+            fecha: new Date().toISOString(),
+            nombre: data.nombre || '',
+            email: data.email || '',
+            telefono: data.telefono || '',
+            ubicacion: data.ubicacion || '',
+            linkedin: data.linkedin || '',
+            puesto: data.puesto || '',
+            resumenUsuario: data.resumenUsuario || '',
+            objetivo: data.objetivo || '',
+            idiomas: data.idiomas || '',
+            herramientas: data.herramientas || '',
+            habilidades: data.habilidades || [],
+            experiencias: data.experiencias || [],
+            estudiosSuperiores: data.estudiosSuperiores || [],
+            estudiosSecundarios: data.estudiosSecundarios || [],
+            cursos: data.cursos || [],
+            template: data.template || 'moderno',
+            photoUrl: null,
+            photoData: null,
+            comprobanteUrl: null,
+            comprobanteName: data.comprobanteName || null,
+        }));
+
+        await withTimeout(
+            db.collection('solicitudes').doc(id).set(doc),
+            15000,
+            'guardar en Firestore'
+        );
+        console.log('Solicitud guardada en Firestore', id);
+
+        // 2) Subir archivos (opcional; no bloquea el éxito del envío)
+        setStatus('Subiendo archivos...');
+        try {
+            if (data.photoData && data.photoData.length < 2_500_000) {
+                photoUrl = await withTimeout(
+                    uploadDataUrl('fotos/' + id + '.jpg', data.photoData),
+                    20000,
+                    'subir foto'
+                );
+            } else if (data.photoData) {
+                console.warn('Foto muy pesada, se omite Storage');
             }
-            try {
-                const compInput = document.getElementById('comprobanteInput');
-                if (compInput && compInput.files && compInput.files[0]) {
-                    const f = compInput.files[0];
-                    const ext = (f.name.split('.').pop() || 'bin').toLowerCase();
-                    comprobanteUrl = await uploadFile(`comprobantes/${id}.${ext}`, f);
-                }
-            } catch (e) {
-                console.warn('No se pudo subir el comprobante a Storage', e);
-            }
-
-            // Firestore no acepta undefined: limpiamos el objeto
-            const doc = JSON.parse(JSON.stringify({
-                id,
-                fecha: new Date().toISOString(),
-                nombre: data.nombre || '',
-                email: data.email || '',
-                telefono: data.telefono || '',
-                ubicacion: data.ubicacion || '',
-                linkedin: data.linkedin || '',
-                puesto: data.puesto || '',
-                resumenUsuario: data.resumenUsuario || '',
-                objetivo: data.objetivo || '',
-                idiomas: data.idiomas || '',
-                herramientas: data.herramientas || '',
-                habilidades: data.habilidades || [],
-                experiencias: data.experiencias || [],
-                estudiosSuperiores: data.estudiosSuperiores || [],
-                estudiosSecundarios: data.estudiosSecundarios || [],
-                cursos: data.cursos || [],
-                template: data.template || 'moderno',
-                photoUrl: photoUrl || null,
-                photoData: null,
-                comprobanteUrl: comprobanteUrl || null,
-                comprobanteName: data.comprobanteName || null,
-            }));
-
-            await db.collection('solicitudes').doc(id).set(doc);
-            console.log('Solicitud guardada en Firestore', id);
-
-            document.getElementById('successDetails').innerHTML = `
-                <p><strong>Nombre:</strong> ${data.nombre}</p>
-                <p><strong>Email:</strong> ${data.email}</p>
-                <p><strong>Teléfono:</strong> ${data.telefono}</p>
-                <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
-                <p><strong>Comprobante:</strong> ${data.comprobanteName || 'Adjuntado'}</p>
-                <p><strong>Nº de solicitud:</strong> ${id}</p>
-                <p><strong>Guardado en:</strong> Firebase (nube)</p>
-            `;
-        } else {
-            // Fallback localStorage (solo este dispositivo)
-            try {
-                let local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-                local.unshift({ ...data, id, photoData: data.photoData, fecha: new Date().toISOString() });
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(local));
-            } catch (e) {}
-            document.getElementById('successDetails').innerHTML = `
-                <p><strong>Nombre:</strong> ${data.nombre}</p>
-                <p><strong>Email:</strong> ${data.email}</p>
-                <p><strong>Teléfono:</strong> ${data.telefono}</p>
-                <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
-                <p><strong>Aviso:</strong> Firebase no está configurado. Los datos quedaron solo en este dispositivo.</p>
-            `;
+        } catch (e) {
+            console.warn('Foto no subida:', e.message || e);
         }
+
+        try {
+            const compInput = document.getElementById('comprobanteInput');
+            if (compInput && compInput.files && compInput.files[0]) {
+                const f = compInput.files[0];
+                const ext = (f.name.split('.').pop() || 'bin').toLowerCase();
+                comprobanteUrl = await withTimeout(
+                    uploadFile('comprobantes/' + id + '.' + ext, f),
+                    20000,
+                    'subir comprobante'
+                );
+            }
+        } catch (e) {
+            console.warn('Comprobante no subido:', e.message || e);
+        }
+
+        // Actualizar doc con URLs si se subieron
+        if (photoUrl || comprobanteUrl) {
+            try {
+                await db.collection('solicitudes').doc(id).update({
+                    photoUrl: photoUrl || null,
+                    comprobanteUrl: comprobanteUrl || null,
+                });
+            } catch (e) {
+                console.warn('No se pudieron guardar las URLs de archivos', e);
+            }
+        }
+
+        document.getElementById('successDetails').innerHTML =
+            '<p><strong>Nombre:</strong> ' + data.nombre + '</p>' +
+            '<p><strong>Email:</strong> ' + data.email + '</p>' +
+            '<p><strong>Teléfono:</strong> ' + data.telefono + '</p>' +
+            '<p><strong>Profesión:</strong> ' + (data.puesto || '—') + '</p>' +
+            '<p><strong>Comprobante:</strong> ' + (data.comprobanteName || 'Adjuntado') + '</p>' +
+            '<p><strong>Nº de solicitud:</strong> ' + id + '</p>' +
+            '<p><strong>Guardado en:</strong> Firebase (nube)</p>' +
+            (photoUrl ? '' : '<p><em>Nota: la foto no se subió a Storage (revisá reglas de Storage).</em></p>');
 
         document.getElementById('step5').classList.remove('active');
         state.currentStep = 6;
@@ -733,11 +777,14 @@ async function enviarSolicitud() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
         console.error(err);
-        alert('Error al enviar: ' + (err.message || 'revisá la configuración de Firebase'));
+        alert(
+            'Error al enviar:\\n\\n' + (err.message || err) +
+            '\\n\\nSi menciona Firestore/permisos: publicá las reglas en Firebase Console.'
+        );
     } finally {
         if (btn) {
             btn.disabled = !state.comprobanteData;
-            btn.textContent = originalText;
+            btn.textContent = originalText || 'Enviar solicitud →';
         }
     }
 }

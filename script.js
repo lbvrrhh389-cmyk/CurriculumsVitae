@@ -1,21 +1,54 @@
 // LBV RRHH - Generador de CV v3 (Cliente + Admin)
 const ADMIN_PASSWORD = 'lbvadmin';
-const STORAGE_KEY = 'lbv_solicitudes'; // fallback offline
+const STORAGE_KEY = 'lbv_solicitudes'; // fallback offline local
 
-// Backend Node.js – mismo origen si servís con el server, o cambiá la URL
-const API_BASE = (window.location.port === '3000' || window.location.hostname === 'localhost')
-  ? `${window.location.protocol}//${window.location.hostname}:3000`
-  : ''; // mismo host en producción
+// ---- Firebase ----
+let db = null;
+let storage = null;
+let firebaseReady = false;
 
-function apiUrl(path) {
-  return `${API_BASE}${path}`;
+function initFirebase() {
+  try {
+    const cfg = window.FIREBASE_CONFIG;
+    const enabled = window.FIREBASE_ENABLED === true;
+    if (!enabled || !cfg || !cfg.apiKey || String(cfg.apiKey).includes('PEGAR')) {
+      console.warn('Firebase no configurado. Usando solo localStorage.');
+      return false;
+    }
+    if (!firebase.apps.length) {
+      firebase.initializeApp(cfg);
+    }
+    db = firebase.firestore();
+    storage = firebase.storage();
+    firebaseReady = true;
+    console.log('Firebase listo');
+    return true;
+  } catch (e) {
+    console.error('Error init Firebase', e);
+    firebaseReady = false;
+    return false;
+  }
 }
 
-function adminHeaders() {
-  return {
-    'X-Admin-Key': sessionStorage.getItem('lbv_admin_key') || ADMIN_PASSWORD,
-  };
+/** Sube dataURL (base64) a Storage y devuelve URL de descarga */
+async function uploadDataUrl(path, dataUrl) {
+  const ref = storage.ref().child(path);
+  await ref.putString(dataUrl, 'data_url');
+  return await ref.getDownloadURL();
 }
+
+/** Sube un File a Storage */
+async function uploadFile(path, file) {
+  const ref = storage.ref().child(path);
+  await ref.put(file);
+  return await ref.getDownloadURL();
+}
+
+// Inicializar al cargar el script y también en DOMContentLoaded
+initFirebase();
+document.addEventListener('DOMContentLoaded', () => {
+  if (!firebaseReady) initFirebase();
+});
 
 const state = {
     currentStep: 1,
@@ -604,9 +637,9 @@ async function enviarSolicitud() {
     }
 
     try {
-        const data = getFormData();
+        if (!firebaseReady) initFirebase();
 
-        // Foto recortada en base64
+        const data = getFormData();
         if (state.photoData) {
             try {
                 data.photoData = await getCroppedPhotoDataURL();
@@ -615,43 +648,73 @@ async function enviarSolicitud() {
             }
         }
 
-        const formData = new FormData();
-        formData.append('data', JSON.stringify({
-            ...data,
-            photoData: data.photoData || null,
-        }));
+        const id = data.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+        let photoUrl = null;
+        let comprobanteUrl = null;
 
-        // Comprobante como archivo real si está disponible
-        const compInput = document.getElementById('comprobanteInput');
-        if (compInput && compInput.files && compInput.files[0]) {
-            formData.append('comprobante', compInput.files[0]);
+        if (firebaseReady) {
+            // Subir foto
+            if (data.photoData) {
+                photoUrl = await uploadDataUrl(`fotos/${id}.jpg`, data.photoData);
+            }
+            // Subir comprobante
+            const compInput = document.getElementById('comprobanteInput');
+            if (compInput && compInput.files && compInput.files[0]) {
+                const f = compInput.files[0];
+                const ext = (f.name.split('.').pop() || 'bin').toLowerCase();
+                comprobanteUrl = await uploadFile(`comprobantes/${id}.${ext}`, f);
+            }
+
+            const doc = {
+                id,
+                fecha: new Date().toISOString(),
+                nombre: data.nombre || '',
+                email: data.email || '',
+                telefono: data.telefono || '',
+                ubicacion: data.ubicacion || '',
+                linkedin: data.linkedin || '',
+                puesto: data.puesto || '',
+                resumenUsuario: data.resumenUsuario || '',
+                objetivo: data.objetivo || '',
+                idiomas: data.idiomas || '',
+                herramientas: data.herramientas || '',
+                habilidades: data.habilidades || [],
+                experiencias: data.experiencias || [],
+                estudiosSuperiores: data.estudiosSuperiores || [],
+                estudiosSecundarios: data.estudiosSecundarios || [],
+                cursos: data.cursos || [],
+                template: data.template || 'moderno',
+                photoUrl,
+                photoData: null,
+                comprobanteUrl,
+                comprobanteName: data.comprobanteName || null,
+            };
+
+            await db.collection('solicitudes').doc(id).set(doc);
+
+            document.getElementById('successDetails').innerHTML = `
+                <p><strong>Nombre:</strong> ${data.nombre}</p>
+                <p><strong>Email:</strong> ${data.email}</p>
+                <p><strong>Teléfono:</strong> ${data.telefono}</p>
+                <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
+                <p><strong>Comprobante:</strong> ${data.comprobanteName || 'Adjuntado'}</p>
+                <p><strong>Nº de solicitud:</strong> ${id}</p>
+            `;
+        } else {
+            // Fallback localStorage (solo este dispositivo)
+            try {
+                let local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                local.unshift({ ...data, id, photoData: data.photoData, fecha: new Date().toISOString() });
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(local));
+            } catch (e) {}
+            document.getElementById('successDetails').innerHTML = `
+                <p><strong>Nombre:</strong> ${data.nombre}</p>
+                <p><strong>Email:</strong> ${data.email}</p>
+                <p><strong>Teléfono:</strong> ${data.telefono}</p>
+                <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
+                <p><strong>Aviso:</strong> Firebase no está configurado. Los datos quedaron solo en este dispositivo.</p>
+            `;
         }
-
-        const res = await fetch(apiUrl('/api/solicitudes'), {
-            method: 'POST',
-            body: formData,
-        });
-
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-            throw new Error(json.error || 'No se pudo guardar la solicitud');
-        }
-
-        // Fallback local por si el admin abre sin server
-        try {
-            let local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-            local.unshift({ ...data, id: json.id || data.id, photoData: data.photoData });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(local));
-        } catch (e) {}
-
-        document.getElementById('successDetails').innerHTML = `
-            <p><strong>Nombre:</strong> ${data.nombre}</p>
-            <p><strong>Email:</strong> ${data.email}</p>
-            <p><strong>Teléfono:</strong> ${data.telefono}</p>
-            <p><strong>Profesión:</strong> ${data.puesto || "—"}</p>
-            <p><strong>Comprobante:</strong> ${data.comprobanteName || 'Adjuntado'}</p>
-            <p><strong>Nº de solicitud:</strong> ${json.id || '—'}</p>
-        `;
 
         document.getElementById('step5').classList.remove('active');
         state.currentStep = 6;
@@ -660,7 +723,7 @@ async function enviarSolicitud() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
         console.error(err);
-        alert('Error al enviar: ' + (err.message || 'revisá que el servidor Node esté corriendo'));
+        alert('Error al enviar: ' + (err.message || 'revisá la configuración de Firebase'));
     } finally {
         if (btn) {
             btn.disabled = !state.comprobanteData;
@@ -918,15 +981,27 @@ function cerrarAdmin() {
 }
 
 async function getSolicitudes() {
-    try {
-        const res = await fetch(apiUrl('/api/solicitudes'), { headers: adminHeaders() });
-        if (res.ok) {
-            const data = await res.json();
-            return data.map(normalizeSolicitud);
+    if (!firebaseReady) initFirebase();
+
+    if (firebaseReady) {
+        try {
+            const snap = await db.collection('solicitudes').orderBy('fecha', 'desc').get();
+            return snap.docs.map((d) => normalizeSolicitud({ id: d.id, ...d.data() }));
+        } catch (e) {
+            console.warn('Error leyendo Firestore, reintento sin orderBy', e);
+            try {
+                const snap = await db.collection('solicitudes').get();
+                const list = snap.docs.map((d) => normalizeSolicitud({ id: d.id, ...d.data() }));
+                list.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+                return list;
+            } catch (e2) {
+                console.error(e2);
+                alert('No se pudieron cargar las solicitudes. Revisá las reglas de Firestore.');
+                return [];
+            }
         }
-    } catch (e) {
-        console.warn('API no disponible, usando localStorage', e);
     }
+
     try {
         return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     } catch (e) {
@@ -934,11 +1009,10 @@ async function getSolicitudes() {
     }
 }
 
-/** Convierte photoUrl del server en photoData usable por el CV */
 function normalizeSolicitud(s) {
     const copy = { ...s };
     if (!copy.photoData && copy.photoUrl) {
-        copy.photoData = apiUrl(copy.photoUrl);
+        copy.photoData = copy.photoUrl;
     }
     return copy;
 }
@@ -969,10 +1043,14 @@ async function cargarListaSolicitudes() {
 async function seleccionarSolicitud(id) {
     let s = (state._solicitudesCache || []).find(x => x.id === id);
     if (!s) {
-        try {
-            const res = await fetch(apiUrl('/api/solicitudes/' + id), { headers: adminHeaders() });
-            if (res.ok) s = normalizeSolicitud(await res.json());
-        } catch (e) {}
+        if (firebaseReady) {
+            try {
+                const doc = await db.collection('solicitudes').doc(id).get();
+                if (doc.exists) s = normalizeSolicitud({ id: doc.id, ...doc.data() });
+            } catch (e) {
+                console.warn(e);
+            }
+        }
     }
     if (!s) {
         const all = await getSolicitudes();
@@ -995,7 +1073,7 @@ async function seleccionarSolicitud(id) {
 
     const fecha = s.fecha ? new Date(s.fecha).toLocaleString('es-AR') : '';
     const compLink = s.comprobanteUrl
-        ? `<a href="${apiUrl(s.comprobanteUrl)}" target="_blank" rel="noopener">${s.comprobanteName || 'Ver archivo'}</a>`
+        ? `<a href="${s.comprobanteUrl}" target="_blank" rel="noopener">${s.comprobanteName || 'Ver archivo'}</a>`
         : (s.comprobanteName || 'No especificado');
     document.getElementById('adminMeta').innerHTML = `
         <p><strong>ID:</strong> ${s.id}</p>
@@ -1003,6 +1081,7 @@ async function seleccionarSolicitud(id) {
         <p><strong>Comprobante:</strong> ${compLink}</p>
         <p><strong>Objetivo del CV:</strong> ${s.objetivo || '—'}</p>
         <p><strong>Email:</strong> ${s.email || '—'}</p>
+        <p><strong>Fuente:</strong> ${firebaseReady ? 'Firebase' : 'Local'}</p>
     `;
 }
 
@@ -1128,17 +1207,18 @@ function adminEnviarWhatsApp() {
 
 async function limpiarTodasSolicitudes() {
     if (!confirm('¿Seguro que querés eliminar TODAS las solicitudes? Esta acción no se puede deshacer.')) return;
+    if (!firebaseReady) initFirebase();
     try {
-        const res = await fetch(apiUrl('/api/solicitudes'), {
-            method: 'DELETE',
-            headers: adminHeaders(),
-        });
-        if (!res.ok) {
-            const j = await res.json().catch(() => ({}));
-            throw new Error(j.error || 'Error al eliminar');
+        if (firebaseReady) {
+            const snap = await db.collection('solicitudes').get();
+            const batch = db.batch();
+            snap.docs.forEach((d) => batch.delete(d.ref));
+            await batch.commit();
         }
+        localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
         console.warn(e);
+        alert('Error al eliminar: ' + (e.message || e));
         localStorage.removeItem(STORAGE_KEY);
     }
     state.currentSolicitud = null;

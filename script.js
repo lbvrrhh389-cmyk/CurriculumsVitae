@@ -37,19 +37,7 @@ function initFirebase() {
   }
 }
 
-/** Sube dataURL (base64) a Storage y devuelve URL de descarga */
-async function uploadDataUrl(path, dataUrl) {
-  const ref = storage.ref().child(path);
-  await ref.putString(dataUrl, 'data_url');
-  return await ref.getDownloadURL();
-}
-
-/** Sube un File a Storage */
-async function uploadFile(path, file) {
-  const ref = storage.ref().child(path);
-  await ref.put(file);
-  return await ref.getDownloadURL();
-}
+/* Firebase Storage desactivado: archivos van a Google Drive */
 
 // Inicializar al cargar el script y también en DOMContentLoaded
 initFirebase();
@@ -663,10 +651,14 @@ function getFormData() {
 async function syncToGoogleSheets(payload) {
   try {
     const cfg = window.GOOGLE_SYNC_CONFIG || {};
-    if (!cfg.ENABLED || !cfg.WEB_APP_URL || String(cfg.WEB_APP_URL).includes('PEGAR')) {
-      console.log('Google Sheets sync desactivado o sin URL. Revisá google-config.js');
+    const enabled = cfg.ENABLED === true || cfg.ENABLED === 'true' || cfg.ENABLED === 1;
+    const url = (cfg.WEB_APP_URL || '').trim();
+    if (!enabled || !url || url.includes('PEGAR')) {
+      console.log('Google Sheets sync desactivado o sin URL.', { enabled: cfg.ENABLED, url: cfg.WEB_APP_URL });
       return null;
     }
+    cfg.WEB_APP_URL = url;
+
 
     // Evitar payloads enormes (límite práctico de Apps Script)
     const bodyObj = { ...payload };

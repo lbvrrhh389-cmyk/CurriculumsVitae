@@ -222,9 +222,10 @@ function validateStep(step) {
         const nombre = document.getElementById('nombre').value.trim();
         const email = document.getElementById('email').value.trim();
         const telefono = document.getElementById('telefono').value.trim();
-        const ubicacion = document.getElementById('ubicacion').value.trim();
-        if (!nombre || !email || !telefono || !ubicacion) {
-            alert('Por favor completá todos los campos obligatorios (marcados con *).');
+        const provincia = document.getElementById('provincia').value.trim();
+        const localidad = document.getElementById('localidad').value.trim();
+        if (!nombre || !email || !telefono || !provincia || !localidad) {
+            alert('Por favor completá todos los campos obligatorios (marcados con *), incluyendo provincia y localidad.');
             return false;
         }
         if (!email.includes('@')) {
@@ -614,7 +615,14 @@ function getFormData() {
         nombre: document.getElementById('nombre').value.trim(),
         email: document.getElementById('email').value.trim(),
         telefono: document.getElementById('telefono').value.trim(),
-        ubicacion: document.getElementById('ubicacion').value.trim(),
+        provincia: document.getElementById('provincia').value.trim(),
+        localidad: document.getElementById('localidad').value.trim(),
+        direccion: (document.getElementById('direccion') && document.getElementById('direccion').value.trim()) || '',
+        ubicacion: [
+            (document.getElementById('direccion') && document.getElementById('direccion').value.trim()) || '',
+            document.getElementById('localidad').value.trim(),
+            document.getElementById('provincia').value.trim()
+        ].filter(Boolean).join(', '),
         linkedin: document.getElementById('linkedin').value.trim(),
         puesto: document.getElementById('puesto').value.trim(),
         resumenUsuario: document.getElementById('resumen').value.trim(),
@@ -650,11 +658,9 @@ async function enviarSolicitud() {
 
     const btn = document.getElementById('btnEnviar');
     const originalText = btn ? btn.textContent : '';
-    const setStatus = (t) => { if (btn) btn.textContent = t; };
-
     if (btn) {
         btn.disabled = true;
-        setStatus('Enviando...');
+        btn.textContent = 'Enviando...';
     }
 
     try {
@@ -668,7 +674,6 @@ async function enviarSolicitud() {
             return;
         }
 
-        setStatus('Preparando datos...');
         const data = getFormData();
         if (state.photoData) {
             try {
@@ -684,7 +689,6 @@ async function enviarSolicitud() {
         let comprobanteUrl = null;
 
         // 1) Primero guardar datos en Firestore (lo más importante)
-        setStatus('Guardando en Firebase...');
         const doc = JSON.parse(JSON.stringify({
             id,
             fecha: new Date().toISOString(),
@@ -692,6 +696,9 @@ async function enviarSolicitud() {
             email: data.email || '',
             telefono: data.telefono || '',
             ubicacion: data.ubicacion || '',
+            provincia: data.provincia || '',
+            localidad: data.localidad || '',
+            direccion: data.direccion || '',
             linkedin: data.linkedin || '',
             puesto: data.puesto || '',
             resumenUsuario: data.resumenUsuario || '',
@@ -718,7 +725,6 @@ async function enviarSolicitud() {
         console.log('Solicitud guardada en Firestore', id);
 
         // 2) Subir archivos (opcional; no bloquea el éxito del envío)
-        setStatus('Subiendo archivos...');
         try {
             if (data.photoData && data.photoData.length < 2_500_000) {
                 photoUrl = await withTimeout(
@@ -863,12 +869,16 @@ function formatPeriodo(inicio, fin) {
 }
 
 function buildCVHtml(data) {
+    const tpl = data.template || state.selectedTemplate || 'moderno';
     const resumen = generarResumenIA(data);
     const competencias = transformarACompetencias(data.habilidades);
+    const photo = data.photoData || data.photoUrl || '';
 
-    let photoHtml = data.photoData
-        ? `<img src="${data.photoData}" alt="Foto" class="cv-photo">`
-        : '';
+    if (tpl === 'tecnico') return buildCVTecnico(data, resumen, competencias, photo);
+    if (tpl === 'sidebar') return buildCVSidebar(data, resumen, competencias, photo);
+    if (tpl === 'pastel') return buildCVPastel(data, resumen, competencias, photo);
+
+    let photoHtml = photo ? `<img src="${photo}" alt="Foto" class="cv-photo">` : '';
 
     let contactParts = [];
     if (data.email) contactParts.push(`<span>✉ ${data.email}</span>`);
@@ -941,15 +951,15 @@ function buildCVHtml(data) {
     if ((data.cursos || []).length > 0) {
         cursosHtml = `
             <div class="cv-section">
-                <h2 class="cv-section-title">Cursos y Certificaciones</h2>
-                ${data.cursos.map(cur => `
+                <h2 class="cv-section-title">Cursos y Capacitaciones</h2>
+                ${data.cursos.map(c => `
                     <div class="cv-item">
                         <div class="cv-item-header">
                             <div>
-                                <div class="cv-item-title">${cur.nombre}</div>
-                                <div class="cv-item-subtitle">${cur.institucion || ''}</div>
+                                <div class="cv-item-title">${c.nombre || 'Curso'}</div>
+                                <div class="cv-item-subtitle">${c.institucion || ''}</div>
                             </div>
-                            <div class="cv-item-date">${cur.anio || ''}</div>
+                            <div class="cv-item-date">${c.anio || ''}</div>
                         </div>
                     </div>
                 `).join('')}
@@ -957,189 +967,237 @@ function buildCVHtml(data) {
         `;
     }
 
-    let competenciasHtml = '';
+    let skillsHtml = '';
     if (competencias.length > 0) {
-        competenciasHtml = `
+        skillsHtml = `
             <div class="cv-section">
                 <h2 class="cv-section-title">Competencias</h2>
-                <ul class="cv-competencias-list">
-                    ${competencias.map(c => `<li>${c}</li>`).join('')}
-                </ul>
+                <div class="cv-skills">
+                    ${competencias.map(c => `<span class="cv-skill-tag">${c}</span>`).join('')}
+                </div>
             </div>
         `;
     }
 
-    let idiomasHtml = data.idiomas ? `
-        <div class="cv-section">
-            <h2 class="cv-section-title">Idiomas</h2>
-            <div class="cv-item-desc">${data.idiomas}</div>
-        </div>
-    ` : '';
-
-    let herramientasHtml = data.herramientas ? `
-        <div class="cv-section">
-            <h2 class="cv-section-title">Herramientas y Software</h2>
-            <div class="cv-item-desc">${data.herramientas}</div>
-        </div>
-    ` : '';
+    let extraHtml = '';
+    if (data.idiomas || data.herramientas) {
+        extraHtml = `
+            <div class="cv-section">
+                <h2 class="cv-section-title">Idiomas y Herramientas</h2>
+                ${data.idiomas ? `<div class="cv-item-desc"><strong>Idiomas:</strong> ${data.idiomas}</div>` : ''}
+                ${data.herramientas ? `<div class="cv-item-desc"><strong>Herramientas:</strong> ${data.herramientas}</div>` : ''}
+            </div>
+        `;
+    }
 
     return `
         <div class="cv-header">
             ${photoHtml}
             <div class="cv-header-info">
-                <h1>${data.nombre || 'Nombre Completo'}</h1>
+                <h1>${data.nombre || ''}</h1>
                 <div class="cv-puesto">${data.puesto || ''}</div>
                 <div class="cv-contact">${contactParts.join('')}</div>
             </div>
         </div>
-        <div class="cv-resumen">${resumen}</div>
+        ${resumen ? `<div class="cv-section"><h2 class="cv-section-title">Perfil Profesional</h2><div class="cv-item-desc">${resumen}</div></div>` : ''}
         ${experienciasHtml}
         ${superioresHtml}
         ${secundariosHtml}
         ${cursosHtml}
-        ${competenciasHtml}
-        ${idiomasHtml}
-        ${herramientasHtml}
+        ${skillsHtml}
+        ${extraHtml}
     `;
 }
 
-// ========== ADMIN ==========
-function mostrarLoginAdmin() {
-    document.getElementById('adminLoginModal').classList.remove('hidden');
-    document.getElementById('adminPassword').value = '';
-    document.getElementById('adminPassword').focus();
-}
+function buildCVTecnico(data, resumen, competencias, photo) {
+    const photoHtml = photo ? `<img src="${photo}" alt="Foto" class="cv-photo">` : '';
+    const contact = [
+        data.ubicacion || '',
+        data.email || '',
+        data.telefono || '',
+    ].filter(Boolean).join(', ');
 
-function cerrarLoginAdmin() {
-    document.getElementById('adminLoginModal').classList.add('hidden');
-}
-
-function verificarAdmin() {
-    const pass = document.getElementById('adminPassword').value;
-    if (pass === ADMIN_PASSWORD) {
-        sessionStorage.setItem('lbv_admin_key', pass);
-        cerrarLoginAdmin();
-        abrirAdmin();
-    } else {
-        alert('Contraseña incorrecta.');
-    }
-}
-
-function abrirAdmin() {
-    document.getElementById('clientApp').classList.add('hidden');
-    document.getElementById('adminApp').classList.remove('hidden');
-    cargarListaSolicitudes();
-}
-
-function cerrarAdmin() {
-    document.getElementById('adminApp').classList.add('hidden');
-    document.getElementById('clientApp').classList.remove('hidden');
-    state.currentSolicitud = null;
-}
-
-async function getSolicitudes() {
-    if (!firebaseReady) initFirebase();
-
-    if (firebaseReady) {
-        try {
-            // Lectura simple (más estable). Ordenamos en el cliente.
-            const snap = await db.collection('solicitudes').get();
-            const list = snap.docs.map((d) => normalizeSolicitud({ id: d.id, ...d.data() }));
-            list.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
-            console.log('Solicitudes leídas de Firestore:', list.length);
-            return list;
-        } catch (e2) {
-            console.error('Error leyendo Firestore', e2);
-            alert('No se pudieron cargar las solicitudes desde Firebase.\n\n' +
-                  'Revisá en la consola de Firebase → Firestore → Reglas\n' +
-                  'que permitan read/write en /solicitudes.\n\n' +
-                  (e2.message || ''));
-            return [];
-        }
-    }
-
-    try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    } catch (e) {
-        return [];
-    }
-}
-
-function normalizeSolicitud(s) {
-    const copy = { ...s };
-    if (!copy.photoData && copy.photoUrl) {
-        copy.photoData = copy.photoUrl;
-    }
-    return copy;
-}
-
-async function cargarListaSolicitudes() {
-    const lista = document.getElementById('listaSolicitudes');
-    lista.innerHTML = '<p class="empty-msg">Cargando...</p>';
-    const solicitudes = await getSolicitudes();
-    state._solicitudesCache = solicitudes;
-
-    if (solicitudes.length === 0) {
-        lista.innerHTML = '<p class="empty-msg">No hay solicitudes todavía.</p>';
-        return;
-    }
-
-    lista.innerHTML = solicitudes.map(s => {
-        const fecha = s.fecha ? new Date(s.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '';
-        return `
-            <div class="solicitud-item ${state.currentSolicitud?.id === s.id ? 'active' : ''}" onclick="seleccionarSolicitud('${s.id}')">
-                <div class="nombre">${s.nombre || 'Sin nombre'}</div>
-                <div class="meta">${s.puesto || ''} · ${fecha}</div>
-                <div class="meta">${s.telefono || ''} · ${s.comprobanteName ? '✓ Pago' : ''}</div>
+    const exp = (data.experiencias || []).map(e => `
+        <div class="cv-item">
+            <div class="cv-item-header">
+                <div>
+                    <div class="cv-item-title">${e.puesto || ''}</div>
+                    <div class="cv-item-subtitle">${e.empresa || ''}${data.ubicacion ? '' : ''}</div>
+                </div>
+                <div class="cv-item-date">${formatPeriodo(e.inicio, e.fin)}</div>
             </div>
-        `;
-    }).join('');
-}
+            ${e.tareas ? `<div class="cv-item-desc"><ul>${String(e.tareas).split(/[.;]/).filter(x => x.trim()).map(x => `<li>${x.trim()}</li>`).join('')}</ul></div>` : ''}
+        </div>
+    `).join('');
 
-async function seleccionarSolicitud(id) {
-    let s = (state._solicitudesCache || []).find(x => x.id === id);
-    if (!s) {
-        if (firebaseReady) {
-            try {
-                const doc = await db.collection('solicitudes').doc(id).get();
-                if (doc.exists) s = normalizeSolicitud({ id: doc.id, ...doc.data() });
-            } catch (e) {
-                console.warn(e);
-            }
-        }
-    }
-    if (!s) {
-        const all = await getSolicitudes();
-        s = all.find(x => x.id === id);
-    }
-    if (!s) return;
+    const formacion = [
+        ...(data.estudiosSuperiores || []).map(e => ({
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin)
+        })),
+        ...(data.estudiosSecundarios || []).map(e => ({
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin)
+        })),
+        ...(data.cursos || []).map(c => ({
+            t: c.nombre, s: c.institucion, d: c.anio || ''
+        })),
+    ].map(f => `
+        <div class="cv-item">
+            <div class="cv-item-header">
+                <div>
+                    <div class="cv-item-title">${f.t || ''}</div>
+                    <div class="cv-item-subtitle">${f.s || ''}</div>
+                </div>
+                <div class="cv-item-date">${f.d || ''}</div>
+            </div>
+        </div>
+    `).join('');
 
-    state.currentSolicitud = normalizeSolicitud(s);
-    state.adminTemplate = s.template || 'moderno';
+    const skills = (competencias.length ? competencias : (data.habilidades || [])).slice(0, 6).map(s => `
+        <div class="cv-skill-bar-row">
+            <span class="cv-skill-bar-label">${s}</span>
+            <span class="cv-skill-bar-track"></span>
+        </div>
+    `).join('');
 
-    document.getElementById('adminEmpty').classList.add('hidden');
-    document.getElementById('adminCVArea').classList.remove('hidden');
-
-    document.querySelectorAll('#adminCVArea .tpl-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tpl === state.adminTemplate);
-    });
-
-    renderAdminCV();
-    cargarListaSolicitudes();
-
-    const fecha = s.fecha ? new Date(s.fecha).toLocaleString('es-AR') : '';
-    const compLink = s.comprobanteUrl
-        ? `<a href="${s.comprobanteUrl}" target="_blank" rel="noopener">${s.comprobanteName || 'Ver archivo'}</a>`
-        : (s.comprobanteName || 'No especificado');
-    document.getElementById('adminMeta').innerHTML = `
-        <p><strong>ID:</strong> ${s.id}</p>
-        <p><strong>Fecha de envío:</strong> ${fecha}</p>
-        <p><strong>Comprobante:</strong> ${compLink}</p>
-        <p><strong>Objetivo del CV:</strong> ${s.objetivo || '—'}</p>
-        <p><strong>Email:</strong> ${s.email || '—'}</p>
-        <p><strong>Fuente:</strong> ${firebaseReady ? 'Firebase' : 'Local'}</p>
+    return `
+        <div class="cv-header">
+            <div class="cv-header-info">
+                <h1>${(data.nombre || '').toUpperCase()}</h1>
+            </div>
+            ${photoHtml}
+        </div>
+        <div class="cv-tech-bar"></div>
+        <h2 class="cv-section-title">Datos personales</h2>
+        <div class="cv-tech-contact">${contact}${data.linkedin ? '<br>LinkedIn' : ''}</div>
+        ${exp ? `<h2 class="cv-section-title">Experiencia</h2>${exp}` : ''}
+        ${formacion ? `<h2 class="cv-section-title">Formación</h2>${formacion}` : ''}
+        ${skills ? `<h2 class="cv-section-title">Habilidades</h2>${skills}` : ''}
     `;
 }
+
+function buildCVSidebar(data, resumen, competencias, photo) {
+    const photoHtml = photo
+        ? `<img src="${photo}" alt="Foto" class="cv-side-photo">`
+        : `<div class="cv-side-photo" style="background:#eee;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:9pt;">Foto</div>`;
+
+    const skills = (competencias.length ? competencias : (data.habilidades || [])).slice(0, 8).map(s => `
+        <div class="cv-side-text">${s}</div>
+        <div class="cv-skill-dots"><span></span><span></span><span></span><span></span><span></span></div>
+    `).join('');
+
+    const exp = (data.experiencias || []).map(e => `
+        <div class="cv-item">
+            <div class="cv-item-header">
+                <div class="cv-item-title">${e.puesto || ''}</div>
+                <div class="cv-item-date">${formatPeriodo(e.inicio, e.fin)}</div>
+            </div>
+            <div class="cv-item-subtitle">${e.empresa || ''}</div>
+            ${e.tareas ? `<div class="cv-item-desc">${e.tareas}</div>` : ''}
+        </div>
+    `).join('');
+
+    const formacion = [
+        ...(data.estudiosSuperiores || []).map(e => ({
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin)
+        })),
+        ...(data.estudiosSecundarios || []).map(e => ({
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin)
+        })),
+        ...(data.cursos || []).map(c => ({
+            t: c.nombre, s: c.institucion, d: c.anio || ''
+        })),
+    ].map(f => `
+        <div class="cv-item">
+            <div class="cv-item-header">
+                <div class="cv-item-title">${f.t || ''}</div>
+                <div class="cv-item-date">${f.d || ''}</div>
+            </div>
+            <div class="cv-item-subtitle">${f.s || ''}</div>
+        </div>
+    `).join('');
+
+    return `
+        <div class="cv-band-top"></div>
+        <div class="cv-side">
+            ${photoHtml}
+            <div class="cv-side-title">Datos personales</div>
+            <div class="cv-side-line"></div>
+            ${data.email ? `<div class="cv-side-label">Correo electrónico</div><div class="cv-side-text">${data.email}</div>` : ''}
+            ${data.telefono ? `<div class="cv-side-label">Teléfono</div><div class="cv-side-text">${data.telefono}</div>` : ''}
+            ${data.ubicacion ? `<div class="cv-side-label">Dirección</div><div class="cv-side-text">${data.ubicacion}</div>` : ''}
+            ${skills ? `<div class="cv-side-title">Habilidades</div><div class="cv-side-line"></div>${skills}` : ''}
+            ${data.idiomas ? `<div class="cv-side-title">Idiomas</div><div class="cv-side-line"></div><div class="cv-side-text">${data.idiomas}</div>` : ''}
+        </div>
+        <div class="cv-main-col">
+            <div class="cv-top-name">${data.nombre || ''}</div>
+            <div class="cv-top-bar"></div>
+            ${resumen ? `<div class="cv-section-title">Perfil</div><div class="cv-main-line"></div><div class="cv-item-desc">${resumen}</div>` : ''}
+            ${exp ? `<div class="cv-section-title" style="margin-top:0.9rem;">Experiencia laboral</div><div class="cv-main-line"></div>${exp}` : ''}
+            ${formacion ? `<div class="cv-section-title" style="margin-top:0.9rem;">Formación</div><div class="cv-main-line"></div>${formacion}` : ''}
+        </div>
+        <div class="cv-band-bottom"></div>
+    `;
+}
+
+function buildCVPastel(data, resumen, competencias, photo) {
+    const photoHtml = photo
+        ? `<div class="cv-pastel-photo-wrap"><img src="${photo}" alt="Foto"></div>`
+        : `<div class="cv-pastel-photo-wrap"></div>`;
+
+    const exp = (data.experiencias || []).map(e => `
+        <div class="cv-item">
+            <div class="cv-item-title">• ${e.puesto || ''}</div>
+            <div class="cv-item-subtitle">${e.empresa || ''}${e.inicio || e.fin ? ', ' + formatPeriodo(e.inicio, e.fin) : ''}</div>
+            ${e.tareas ? `<div class="cv-item-desc">${e.tareas}</div>` : ''}
+        </div>
+    `).join('');
+
+    const edu = [
+        ...(data.estudiosSuperiores || []).map(e => ({
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin), extra: e.estado
+        })),
+        ...(data.estudiosSecundarios || []).map(e => ({
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin), extra: ''
+        })),
+    ].map(f => `
+        <div class="cv-item">
+            <div class="cv-item-title">${f.s || ''}</div>
+            <div class="cv-item-subtitle">${f.t || ''}${f.d ? ', ' + f.d : ''}</div>
+            ${f.extra ? `<div class="cv-item-desc">• ${f.extra}</div>` : ''}
+        </div>
+    `).join('');
+
+    const cursos = (data.cursos || []).map(c => `
+        <div class="cv-item">
+            <div class="cv-item-title">• ${c.nombre || ''}</div>
+            <div class="cv-item-subtitle">${c.institucion || ''}${c.anio ? ', ' + c.anio : ''}</div>
+        </div>
+    `).join('');
+
+    return `
+        <div class="cv-pastel-left">
+            ${photoHtml}
+            ${resumen ? `<div class="cv-pastel-summary">${resumen}</div>` : ''}
+            <div class="cv-pastel-banner">👤 Contacto</div>
+            <div class="cv-pastel-contact">
+                ${data.telefono ? `<p><strong>CELULAR:</strong> ${data.telefono}</p>` : ''}
+                ${data.email ? `<p><strong>CORREO:</strong> ${data.email}</p>` : ''}
+                ${data.ubicacion ? `<p><strong>DIRECCIÓN:</strong> ${data.ubicacion}</p>` : ''}
+            </div>
+            ${edu ? `<div class="cv-pastel-banner">🎓 Educación</div>${edu}` : ''}
+        </div>
+        <div class="cv-pastel-right">
+            <div class="cv-pastel-name">${(data.nombre || '').toUpperCase()}</div>
+            ${data.puesto ? `<div class="cv-pastel-role">${data.puesto}</div>` : ''}
+            ${exp ? `<div class="cv-pastel-banner">✓ Experiencia laboral</div>${exp}` : ''}
+            ${(cursos || data.idiomas) ? `<div class="cv-pastel-banner">📖 Cursos | Idiomas</div>
+                ${data.idiomas ? `<div class="cv-item"><div class="cv-item-title">• Idiomas</div><div class="cv-item-subtitle">${data.idiomas}</div></div>` : ''}
+                ${cursos}
+            ` : ''}
+        </div>
+    `;
+}
+
 
 function renderAdminCV() {
     if (!state.currentSolicitud) return;
@@ -1281,4 +1339,151 @@ async function limpiarTodasSolicitudes() {
     document.getElementById('adminCVArea').classList.add('hidden');
     document.getElementById('adminEmpty').classList.remove('hidden');
     cargarListaSolicitudes();
+}
+
+
+// ===== Provincias y localidades (Argentina) =====
+const AR_UBICACIONES = {
+  "Buenos Aires": ["La Plata","Mar del Plata","Bahía Blanca","Tandil","San Nicolás","Pilar","Tigre","Quilmes","Avellaneda","Lomas de Zamora","Lanús","Morón","San Isidro","Vicente López","Almirante Brown","Esteban Echeverría","Ezeiza","Merlo","Moreno","Ituzaingó","Hurlingham","Tres de Febrero","San Martín","José C. Paz","Malvinas Argentinas","Otra"],
+  "CABA": ["Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito","Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta","La Boca","Liniers","Mataderos","Monserrat","Monte Castro","Nueva Pompeya","Núñez","Palermo","Parque Avellaneda","Parque Chacabuco","Parque Patricios","Puerto Madero","Recoleta","Retiro","Saavedra","San Cristóbal","San Nicolás","San Telmo","Vélez Sársfield","Versalles","Villa Crespo","Villa del Parque","Villa Devoto","Villa Lugano","Villa Luro","Villa Ortúzar","Villa Pueyrredón","Villa Real","Villa Riachuelo","Villa Santa Rita","Villa Soldati","Villa Urquiza","Otra"],
+  "Catamarca": ["San Fernando del Valle de Catamarca","Belén","Andalgalá","Tinogasta","Santa María","Otra"],
+  "Chaco": ["Resistencia","Barranqueras","Presidencia Roque Sáenz Peña","Villa Ángela","Charata","Otra"],
+  "Chubut": ["Rawson","Comodoro Rivadavia","Puerto Madryn","Trelew","Esquel","Otra"],
+  "Córdoba": ["Córdoba","Villa María","Río Cuarto","Carlos Paz","San Francisco","Alta Gracia","Jesús María","Otra"],
+  "Corrientes": ["Corrientes","Goya","Mercedes","Paso de los Libres","Curuzú Cuatiá","Otra"],
+  "Entre Ríos": ["Paraná","Concordia","Gualeguaychú","Concepción del Uruguay","Gualeguay","Otra"],
+  "Formosa": ["Formosa","Clorinda","Pirané","Las Lomitas","Otra"],
+  "Jujuy": ["San Salvador de Jujuy","Palpalá","San Pedro","Libertador General San Martín","Otra"],
+  "La Pampa": ["Santa Rosa","General Pico","Toay","Realicó","Otra"],
+  "La Rioja": ["La Rioja","Chilecito","Aimogasta","Chamical","Otra"],
+  "Mendoza": ["Mendoza","Godoy Cruz","Guaymallén","Las Heras","San Rafael","Maipú","Luján de Cuyo","Otra"],
+  "Misiones": ["Posadas","Oberá","Eldorado","Puerto Iguazú","Apóstoles","Otra"],
+  "Neuquén": ["Neuquén","Cutral Có","Plottier","Zapala","San Martín de los Andes","Otra"],
+  "Río Negro": ["Viedma","Bariloche","General Roca","Cipolletti","Allen","Otra"],
+  "Salta": ["Salta","San Ramón de la Nueva Orán","Tartagal","General Güemes","Otra"],
+  "San Juan": ["San Juan","Rawson","Chimbas","Rivadavia","Caucete","Otra"],
+  "San Luis": ["San Luis","Villa Mercedes","Merlo","La Punta","Otra"],
+  "Santa Cruz": ["Río Gallegos","Caleta Olivia","El Calafate","Pico Truncado","Otra"],
+  "Santa Fe": ["Santa Fe","Rosario","Rafaela","Venado Tuerto","Reconquista","Santo Tomé","Otra"],
+  "Santiago del Estero": ["Santiago del Estero","La Banda","Termas de Río Hondo","Añatuya","Otra"],
+  "Tierra del Fuego": ["Ushuaia","Río Grande","Tolhuin","Otra"],
+  "Tucumán": ["San Miguel de Tucumán","Yerba Buena","Tafí Viejo","Concepción","Otra"]
+};
+
+function initProvincias() {
+  const sel = document.getElementById('provincia');
+  if (!sel || sel.options.length > 1) return;
+  Object.keys(AR_UBICACIONES).sort((a, b) => a.localeCompare(b, 'es')).forEach((p) => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    sel.appendChild(opt);
+  });
+}
+
+function onProvinciaChange() {
+  const prov = document.getElementById('provincia').value;
+  const loc = document.getElementById('localidad');
+  loc.innerHTML = '';
+  if (!prov || !AR_UBICACIONES[prov]) {
+    loc.disabled = true;
+    loc.innerHTML = '<option value="">Primero elegí una provincia</option>';
+    return;
+  }
+  loc.disabled = false;
+  const ph = document.createElement('option');
+  ph.value = '';
+  ph.textContent = 'Seleccionar localidad';
+  loc.appendChild(ph);
+  AR_UBICACIONES[prov].forEach((l) => {
+    const opt = document.createElement('option');
+    opt.value = l;
+    opt.textContent = l;
+    loc.appendChild(opt);
+  });
+}
+
+// Init provincias cuando el DOM está listo
+document.addEventListener('DOMContentLoaded', () => {
+  initProvincias();
+});
+initProvincias();
+
+// ===== Preview de plantillas =====
+let _previewTplName = 'moderno';
+
+function previewTemplate(name) {
+  _previewTplName = name;
+  selectTemplate(name);
+  const sample = {
+    nombre: 'María Ejemplo',
+    puesto: 'Analista administrativa',
+    email: 'maria.ejemplo@email.com',
+    telefono: '+54 9 11 5555-1234',
+    ubicacion: 'CABA, Buenos Aires',
+    linkedin: '',
+    resumenUsuario: 'Cuento con experiencia en gestión administrativa y atención al cliente. Me caracterizo por la organización, el compromiso y el trabajo en equipo.',
+    habilidades: ['Trabajo en equipo', 'Organización', 'Microsoft Excel', 'Atención al público'],
+    experiencias: [{
+      puesto: 'Asistente administrativa',
+      empresa: 'Empresa Demo S.A.',
+      inicio: '2021',
+      fin: '2024',
+      tareas: 'Gestión de agenda, atención telefónica y armado de reportes.'
+    }],
+    estudiosSuperiores: [{
+      titulo: 'Tecnicatura en Administración',
+      establecimiento: 'Instituto Ejemplo',
+      inicio: '2018',
+      fin: '2021',
+      estado: 'Completo'
+    }],
+    estudiosSecundarios: [],
+    cursos: [{ nombre: 'Excel avanzado', institucion: 'Curso online', anio: '2023' }],
+    idiomas: 'Español (nativo), Inglés (intermedio)',
+    herramientas: 'Microsoft Office, Google Workspace',
+    photoData: null,
+    template: name
+  };
+  const doc = document.getElementById('templatePreviewDoc');
+  doc.className = 'cv-document template-' + name;
+  doc.innerHTML = buildCVHtml(sample);
+  const titles = {
+    moderno: 'Estilo Moderno',
+    clasico: 'Estilo Clásico',
+    ejecutivo: 'Estilo Ejecutivo',
+    minimal: 'Estilo Minimal',
+    creativo: 'Estilo Creativo',
+    tecnico: 'Estilo Técnico',
+    sidebar: 'Estilo Sidebar',
+    pastel: 'Estilo Pastel'
+  };
+  document.getElementById('tplPreviewTitle').textContent = titles[name] || 'Vista previa';
+  document.getElementById('templatePreviewModal').classList.remove('hidden');
+}
+
+function cerrarPreviewTemplate() {
+  document.getElementById('templatePreviewModal').classList.add('hidden');
+}
+
+function confirmarPlantillaPreview() {
+  selectTemplate(_previewTplName);
+  cerrarPreviewTemplate();
+}
+
+// ===== Comprobante admin =====
+function verComprobante(url, nombre) {
+  const body = document.getElementById('comprobanteModalBody');
+  const lower = (nombre || url || '').toLowerCase();
+  if (lower.includes('.pdf') || lower.includes('application/pdf')) {
+    body.innerHTML = '<iframe src="' + url + '" title="Comprobante PDF"></iframe>';
+  } else {
+    body.innerHTML = '<img src="' + url + '" alt="Comprobante de pago">';
+  }
+  document.getElementById('comprobanteModal').classList.remove('hidden');
+}
+
+function cerrarComprobanteModal() {
+  document.getElementById('comprobanteModal').classList.add('hidden');
+  document.getElementById('comprobanteModalBody').innerHTML = '';
 }

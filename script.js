@@ -1292,6 +1292,126 @@ function buildCVPastel(data, resumen, competencias, photo) {
 }
 
 
+
+async function getSolicitudes() {
+    if (!firebaseReady) initFirebase();
+
+    if (firebaseReady) {
+        try {
+            const snap = await db.collection('solicitudes').get();
+            const list = snap.docs.map((d) => normalizeSolicitud({ id: d.id, ...d.data() }));
+            list.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+            console.log('Solicitudes leídas de Firestore:', list.length);
+            return list;
+        } catch (e2) {
+            console.error('Error leyendo Firestore', e2);
+            alert(
+                'No se pudieron cargar las solicitudes desde Firebase.\n\n' +
+                'Revisá en Firebase → Firestore → Reglas\n' +
+                'que permitan read/write en /solicitudes.\n\n' +
+                (e2.message || '')
+            );
+            return [];
+        }
+    }
+
+    try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch (e) {
+        return [];
+    }
+}
+
+function normalizeSolicitud(s) {
+    const copy = { ...s };
+    if (!copy.photoData && copy.photoUrl) {
+        copy.photoData = copy.photoUrl;
+    }
+    return copy;
+}
+
+async function cargarListaSolicitudes() {
+    const lista = document.getElementById('listaSolicitudes');
+    if (!lista) return;
+    lista.innerHTML = '<p class="empty-msg">Cargando...</p>';
+    const solicitudes = await getSolicitudes();
+    state._solicitudesCache = solicitudes;
+
+    if (solicitudes.length === 0) {
+        lista.innerHTML = '<p class="empty-msg">No hay solicitudes todavía.</p>';
+        return;
+    }
+
+    lista.innerHTML = solicitudes.map((s) => {
+        const fecha = s.fecha
+            ? new Date(s.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
+            : '';
+        return `
+            <div class="solicitud-item ${state.currentSolicitud?.id === s.id ? 'active' : ''}" onclick="seleccionarSolicitud('${s.id}')">
+                <div class="nombre">${s.nombre || 'Sin nombre'}</div>
+                <div class="meta">${s.puesto || ''} · ${fecha}</div>
+                <div class="meta">${s.telefono || ''} · ${s.comprobanteName ? '✓ Pago' : ''}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function seleccionarSolicitud(id) {
+    let s = (state._solicitudesCache || []).find((x) => x.id === id);
+    if (!s && firebaseReady) {
+        try {
+            const doc = await db.collection('solicitudes').doc(id).get();
+            if (doc.exists) s = normalizeSolicitud({ id: doc.id, ...doc.data() });
+        } catch (e) {
+            console.warn(e);
+        }
+    }
+    if (!s) {
+        const all = await getSolicitudes();
+        s = all.find((x) => x.id === id);
+    }
+    if (!s) return;
+
+    state.currentSolicitud = normalizeSolicitud(s);
+    state.adminTemplate = s.template || 'moderno';
+
+    document.getElementById('adminEmpty')?.classList.add('hidden');
+    document.getElementById('adminCVArea')?.classList.remove('hidden');
+
+    document.querySelectorAll('#adminCVArea .tpl-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.tpl === state.adminTemplate);
+    });
+
+    renderAdminCV();
+    cargarListaSolicitudes();
+
+    const fecha = s.fecha ? new Date(s.fecha).toLocaleString('es-AR') : '';
+    const ubicTxt = s.ubicacion || [s.localidad, s.provincia].filter(Boolean).join(', ') || '—';
+    let compHtml = s.comprobanteName || 'No especificado';
+    if (s.comprobanteUrl) {
+        const safeUrl = String(s.comprobanteUrl).replace(/'/g, "\\'");
+        const safeName = String(s.comprobanteName || 'comprobante').replace(/'/g, "\\'");
+        compHtml = `
+            <button type="button" class="btn-secondary btn-sm admin-comp-btn" onclick="verComprobante('${safeUrl}', '${safeName}')">
+                👁 Previsualizar comprobante
+            </button>
+            <a href="${s.comprobanteUrl}" target="_blank" rel="noopener" style="margin-left:0.5rem;font-size:0.85rem;">Abrir en pestaña</a>
+        `;
+    } else if (s.archivosEn === 'Google Drive') {
+        compHtml = 'Archivos en Google Drive / Sheets (revisá ahí los links)';
+    }
+
+    document.getElementById('adminMeta').innerHTML = `
+        <p><strong>ID:</strong> ${s.id}</p>
+        <p><strong>Fecha de envío:</strong> ${fecha}</p>
+        <p><strong>Ubicación:</strong> ${ubicTxt}</p>
+        <p><strong>Comprobante:</strong></p>
+        <div>${compHtml}</div>
+        <p style="margin-top:0.75rem;"><strong>Objetivo del CV:</strong> ${s.objetivo || '—'}</p>
+        <p><strong>Email:</strong> ${s.email || '—'}</p>
+    `;
+}
+
 function renderAdminCV() {
     if (!state.currentSolicitud) return;
     const data = { ...state.currentSolicitud, template: state.adminTemplate };

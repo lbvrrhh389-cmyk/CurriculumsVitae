@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -92,9 +93,12 @@
                         </div>
                         <div class="form-group">
                             <label for="localidad">Localidad *</label>
-                            <select id="localidad" required disabled>
+                            <select id="localidad" required disabled onchange="onLocalidadChange()">
                                 <option value="">Primero elegí una provincia</option>
                             </select>
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="localidadOtra" class="hidden" placeholder="Escribí tu localidad" autocomplete="off">
                         </div>
                         <div class="form-group">
                             <label for="direccion">Dirección (opcional)</label>

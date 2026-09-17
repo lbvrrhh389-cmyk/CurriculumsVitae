@@ -1,3 +1,4 @@
+
 :root {
     --primary: #0f2744;
     --primary-light: #1a3a5c;
@@ -1029,3 +1030,220 @@ body {
 #adminCvPreview.pdf-exporting *:hover {
     background: transparent !important;
 }
+
+
+/* Template preview buttons */
+.btn-preview-tpl {
+    display: block;
+    width: 100%;
+    margin-top: 0.35rem;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border: 1px solid var(--accent);
+    background: white;
+    color: var(--accent);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+}
+.btn-preview-tpl:hover {
+    background: var(--accent);
+    color: white;
+}
+.modal-wide {
+    max-width: 720px;
+    width: 95%;
+    max-height: 90vh;
+    overflow-y: auto;
+    text-align: left;
+}
+.modal-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+.modal-header-row h3 {
+    margin: 0;
+    color: var(--primary);
+}
+.tpl-modal-preview {
+    max-height: 60vh;
+    overflow: auto;
+}
+.tpl-modal-preview .cv-document {
+    transform: scale(0.85);
+    transform-origin: top center;
+    min-height: auto;
+    width: 100%;
+    max-width: 210mm;
+}
+.comprobante-modal-body {
+    text-align: center;
+    min-height: 200px;
+}
+.comprobante-modal-body img {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+.comprobante-modal-body iframe {
+    width: 100%;
+    height: 70vh;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.admin-comp-btn {
+    margin-top: 0.5rem;
+}
+
+
+/* Mini previews for new templates */
+.tecnico-preview { background: linear-gradient(135deg, #2f4769 0%, #4a6fa5 100%); }
+.sidebar-preview { background: linear-gradient(135deg, #d66b6b 0%, #f5d0d0 50%, #fff 50%); }
+.pastel-preview { background: linear-gradient(135deg, #e8b4bc 0%, #f8e8ec 50%, #fff 50%); }
+
+/* ===== Template Técnico (navy banners, photo top-right) ===== */
+.template-tecnico { font-family: 'Liberation Sans', Helvetica, Arial, sans-serif; color: #000; }
+.template-tecnico .cv-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  border-bottom: none; margin-bottom: 0.6rem; padding-bottom: 0.4rem;
+}
+.template-tecnico .cv-header-info h1 {
+  font-size: 18pt; color: #2f4769; font-weight: 700; letter-spacing: 0.5px; margin: 0 0 0.3rem;
+  text-transform: uppercase;
+}
+.template-tecnico .cv-puesto { display: none; }
+.template-tecnico .cv-contact { display: none; }
+.template-tecnico .cv-photo {
+  width: 64px; height: 64px; border-radius: 0; object-fit: cover;
+  border: 1px solid #ccc; flex-shrink: 0;
+}
+.template-tecnico .cv-tech-bar {
+  height: 4px; background: #2f4769; margin: 0.4rem 0 0.8rem;
+}
+.template-tecnico .cv-section-title {
+  display: inline-block; background: #2f4769; color: #fff;
+  font-size: 11pt; font-weight: 700; text-transform: uppercase;
+  padding: 0.25rem 0.7rem; margin: 0 0 0.55rem; border: none; letter-spacing: 0.5px;
+}
+.template-tecnico .cv-item-title { font-weight: 700; color: #333; font-size: 10pt; }
+.template-tecnico .cv-item-subtitle { color: #333; font-size: 9.5pt; }
+.template-tecnico .cv-item-date { color: #333; font-size: 9.5pt; white-space: nowrap; }
+.template-tecnico .cv-item-desc { font-size: 9.5pt; color: #000; }
+.template-tecnico .cv-item-desc li { list-style: disc; margin-left: 1.2rem; }
+.template-tecnico .cv-skill-bar-row {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem;
+}
+.template-tecnico .cv-skill-bar-label { font-size: 9.5pt; min-width: 40%; }
+.template-tecnico .cv-skill-bar-track {
+  flex: 1; height: 4px; background: #2f4769;
+}
+.template-tecnico .cv-tech-contact {
+  font-size: 9.5pt; color: #000; line-height: 1.45; margin-bottom: 0.6rem;
+}
+
+/* ===== Template Sidebar (coral two-column) ===== */
+.template-sidebar {
+  font-family: 'Liberation Sans', Helvetica, Arial, sans-serif;
+  display: grid; grid-template-columns: 32% 68%; min-height: 100%;
+  position: relative; padding: 0 !important;
+}
+.template-sidebar .cv-side {
+  background: #fdf8f8; padding: 1.1rem 0.85rem 1.5rem;
+  border-right: none;
+}
+.template-sidebar .cv-main-col { padding: 1.1rem 1rem 1.5rem 1.1rem; }
+.template-sidebar .cv-side-photo {
+  width: 100%; max-width: 140px; aspect-ratio: 1; object-fit: cover;
+  display: block; margin: 0 auto 0.9rem; border-radius: 0;
+}
+.template-sidebar .cv-side-name {
+  display: none;
+}
+.template-sidebar .cv-top-name {
+  font-size: 18pt; font-weight: 700; color: #d66b6b; margin: 0 0 0.35rem;
+  padding-top: 0.2rem;
+}
+.template-sidebar .cv-top-bar {
+  height: 1px; background: #e2e2e2; margin-bottom: 0.9rem;
+}
+.template-sidebar .cv-side-title {
+  font-size: 11pt; font-weight: 700; color: #d66b6b; margin: 0.9rem 0 0.25rem;
+}
+.template-sidebar .cv-side-line {
+  height: 1px; background: #e2e2e2; margin-bottom: 0.45rem;
+}
+.template-sidebar .cv-side-label {
+  font-size: 9pt; font-weight: 700; color: #000; margin-top: 0.55rem;
+}
+.template-sidebar .cv-side-text { font-size: 9pt; color: #000; margin-bottom: 0.15rem; word-break: break-word; }
+.template-sidebar .cv-skill-dots {
+  display: flex; gap: 4px; margin: 0.15rem 0 0.45rem;
+}
+.template-sidebar .cv-skill-dots span {
+  width: 8px; height: 8px; border-radius: 50%; background: #d66b6b; display: inline-block;
+}
+.template-sidebar .cv-section-title {
+  font-size: 12pt; font-weight: 700; color: #d66b6b; border: none;
+  margin: 0 0 0.35rem; padding: 0; text-transform: none; letter-spacing: 0;
+}
+.template-sidebar .cv-main-line {
+  height: 1px; background: #e2e2e2; margin-bottom: 0.55rem;
+}
+.template-sidebar .cv-item-title { font-weight: 700; color: #333; font-size: 10pt; }
+.template-sidebar .cv-item-subtitle { color: #d66b6b; font-size: 9.5pt; }
+.template-sidebar .cv-item-date { color: #d66b6b; font-size: 9.5pt; font-weight: 700; }
+.template-sidebar .cv-item-desc { font-size: 9.5pt; }
+.template-sidebar .cv-band-top,
+.template-sidebar .cv-band-bottom {
+  position: absolute; left: 0; right: 0; height: 18px; background: #d66b6b;
+}
+.template-sidebar .cv-band-top { top: 0; }
+.template-sidebar .cv-band-bottom { bottom: 0; }
+.template-sidebar .cv-inner { padding-top: 22px; padding-bottom: 22px; display: contents; }
+
+/* ===== Template Pastel (pink soft two-column) ===== */
+.template-pastel {
+  font-family: 'Inter', Helvetica, Arial, sans-serif;
+  display: grid; grid-template-columns: 34% 66%; gap: 0;
+  padding: 1.2rem 1.1rem !important;
+}
+.template-pastel .cv-pastel-left { padding-right: 0.9rem; }
+.template-pastel .cv-pastel-right { padding-left: 0.5rem; }
+.template-pastel .cv-pastel-photo-wrap {
+  width: 120px; height: 120px; border-radius: 50%;
+  border: 5px solid #e8b4bc; margin: 0 auto 1rem; overflow: hidden;
+  background: #f8e8ec;
+}
+.template-pastel .cv-pastel-photo-wrap img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.template-pastel .cv-pastel-name {
+  font-size: 20pt; font-weight: 800; color: #1a1a1a; line-height: 1.1;
+  margin: 0 0 0.45rem; letter-spacing: -0.5px;
+}
+.template-pastel .cv-pastel-role {
+  display: inline-block; background: #d4a5b0; color: #fff;
+  font-size: 9pt; font-weight: 700; letter-spacing: 0.5px;
+  padding: 0.35rem 0.75rem; margin-bottom: 1rem; text-transform: uppercase;
+}
+.template-pastel .cv-pastel-banner {
+  background: #f8e8ec; color: #5c4a4e; font-size: 10pt; font-weight: 700;
+  padding: 0.4rem 0.65rem; margin: 0.85rem 0 0.55rem;
+  display: flex; align-items: center; gap: 0.4rem; text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.template-pastel .cv-pastel-summary {
+  font-size: 9.5pt; color: #444; line-height: 1.45; margin-bottom: 0.8rem;
+}
+.template-pastel .cv-pastel-contact p {
+  font-size: 8.5pt; color: #333; margin: 0.25rem 0; word-break: break-word;
+}
+.template-pastel .cv-item-title { font-weight: 700; font-size: 10pt; color: #1a1a1a; }
+.template-pastel .cv-item-subtitle { font-size: 9pt; color: #777; font-style: italic; }
+.template-pastel .cv-item-desc { font-size: 9pt; color: #333; }
+.template-pastel .cv-item { margin-bottom: 0.7rem; }

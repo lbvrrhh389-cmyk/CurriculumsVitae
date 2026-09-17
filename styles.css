@@ -1,4 +1,5 @@
 
+
 :root {
     --primary: #0f2744;
     --primary-light: #1a3a5c;
@@ -681,19 +682,34 @@ body {
     padding: 1.5rem;
     border-radius: 12px;
     overflow-x: auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
 }
 
 .cv-document {
     background: white;
     width: 210mm;
+    max-width: 210mm;
     min-height: 297mm;
     margin: 0 auto;
-    padding: 16mm 15mm;
+    padding: 14mm 16mm;
     box-shadow: var(--shadow-lg);
     font-size: 10.5pt;
     line-height: 1.45;
     color: #1a202c;
     transition: all 0.3s;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+#adminCvPreview {
+    width: 210mm;
+    max-width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    box-sizing: border-box;
+    background: #fff;
 }
 
 /* TEMPLATE MODERNO */
@@ -1019,13 +1035,28 @@ body {
     border-radius: 2px;
 }
 
-/* Evitar que al editar se vea raro el header de plantillas con márgenes negativos */
 #adminCvPreview[contenteditable="true"] .cv-header {
     cursor: text;
 }
 
 #adminCvPreview.pdf-exporting {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
     outline: none !important;
+    border: none !important;
+    background: #fff !important;
+}
+#adminCvPreview.pdf-exporting .cv-document {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    box-sizing: border-box;
 }
 #adminCvPreview.pdf-exporting *:hover {
     background: transparent !important;

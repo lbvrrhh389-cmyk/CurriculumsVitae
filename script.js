@@ -1620,7 +1620,7 @@ function adminEnviarWhatsApp() {
     }
 
     const mensaje = encodeURIComponent(
-        `Hola ${data.nombre || ''}! 👋\n\nTe enviamos tu Curriculum Vitae profesional generado por LBV RRHH.\n\nPor favor adjuntá el archivo PDF que descargaste.\n\n¡Saludos!`
+        `Hola ${data.nombre || ''}! 👋\n\nTe enviamos tu Curriculum Vitae profesional generado por LBV RRHH.\n\n¡Saludos!`
     );
 
     // Descargar primero

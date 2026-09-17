@@ -223,7 +223,11 @@ function validateStep(step) {
         const email = document.getElementById('email').value.trim();
         const telefono = document.getElementById('telefono').value.trim();
         const provincia = document.getElementById('provincia').value.trim();
-        const localidad = document.getElementById('localidad').value.trim();
+        let localidad = document.getElementById('localidad').value.trim();
+        if (localidad === 'Otra') {
+            const o = document.getElementById('localidadOtra');
+            localidad = (o && o.value.trim()) || '';
+        }
         if (!nombre || !email || !telefono || !provincia || !localidad) {
             alert('Por favor completá todos los campos obligatorios (marcados con *), incluyendo provincia y localidad.');
             return false;
@@ -616,13 +620,26 @@ function getFormData() {
         email: document.getElementById('email').value.trim(),
         telefono: document.getElementById('telefono').value.trim(),
         provincia: document.getElementById('provincia').value.trim(),
-        localidad: document.getElementById('localidad').value.trim(),
+        localidad: (function() {
+            const l = document.getElementById('localidad').value.trim();
+            if (l === 'Otra') {
+                const o = document.getElementById('localidadOtra');
+                return (o && o.value.trim()) || 'Otra';
+            }
+            return l;
+        })(),
         direccion: (document.getElementById('direccion') && document.getElementById('direccion').value.trim()) || '',
-        ubicacion: [
-            (document.getElementById('direccion') && document.getElementById('direccion').value.trim()) || '',
-            document.getElementById('localidad').value.trim(),
-            document.getElementById('provincia').value.trim()
-        ].filter(Boolean).join(', '),
+        ubicacion: (function() {
+            const l = document.getElementById('localidad').value.trim();
+            const loc = (l === 'Otra' && document.getElementById('localidadOtra'))
+                ? document.getElementById('localidadOtra').value.trim() || 'Otra'
+                : l;
+            return [
+                (document.getElementById('direccion') && document.getElementById('direccion').value.trim()) || '',
+                loc,
+                document.getElementById('provincia').value.trim()
+            ].filter(Boolean).join(', ');
+        })(),
         linkedin: document.getElementById('linkedin').value.trim(),
         puesto: document.getElementById('puesto').value.trim(),
         resumenUsuario: document.getElementById('resumen').value.trim(),
@@ -1342,32 +1359,87 @@ async function limpiarTodasSolicitudes() {
 }
 
 
+
+// ===== Admin login / panel =====
+function mostrarLoginAdmin() {
+    const modal = document.getElementById('adminLoginModal');
+    if (!modal) {
+        alert('No se encontró el formulario de acceso admin.');
+        return;
+    }
+    modal.classList.remove('hidden');
+    const input = document.getElementById('adminPassword');
+    if (input) {
+        input.value = '';
+        setTimeout(() => input.focus(), 50);
+    }
+}
+
+function cerrarLoginAdmin() {
+    const modal = document.getElementById('adminLoginModal');
+    if (modal) modal.classList.add('hidden');
+    const input = document.getElementById('adminPassword');
+    if (input) input.value = '';
+}
+
+function verificarAdmin() {
+    const pass = (document.getElementById('adminPassword')?.value || '').trim();
+    if (pass === ADMIN_PASSWORD) {
+        sessionStorage.setItem('lbv_admin_key', pass);
+        cerrarLoginAdmin();
+        abrirAdmin();
+    } else {
+        alert('Contraseña incorrecta.');
+        const input = document.getElementById('adminPassword');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    }
+}
+
+function abrirAdmin() {
+    document.getElementById('clientApp')?.classList.add('hidden');
+    document.getElementById('adminApp')?.classList.remove('hidden');
+    state.currentSolicitud = null;
+    document.getElementById('adminCVArea')?.classList.add('hidden');
+    document.getElementById('adminEmpty')?.classList.remove('hidden');
+    cargarListaSolicitudes();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cerrarAdmin() {
+    document.getElementById('adminApp')?.classList.add('hidden');
+    document.getElementById('clientApp')?.classList.remove('hidden');
+    state.currentSolicitud = null;
+}
+
 // ===== Provincias y localidades (Argentina) =====
 const AR_UBICACIONES = {
-  "Buenos Aires": ["La Plata","Mar del Plata","Bahía Blanca","Tandil","San Nicolás","Pilar","Tigre","Quilmes","Avellaneda","Lomas de Zamora","Lanús","Morón","San Isidro","Vicente López","Almirante Brown","Esteban Echeverría","Ezeiza","Merlo","Moreno","Ituzaingó","Hurlingham","Tres de Febrero","San Martín","José C. Paz","Malvinas Argentinas","Otra"],
-  "CABA": ["Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito","Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta","La Boca","Liniers","Mataderos","Monserrat","Monte Castro","Nueva Pompeya","Núñez","Palermo","Parque Avellaneda","Parque Chacabuco","Parque Patricios","Puerto Madero","Recoleta","Retiro","Saavedra","San Cristóbal","San Nicolás","San Telmo","Vélez Sársfield","Versalles","Villa Crespo","Villa del Parque","Villa Devoto","Villa Lugano","Villa Luro","Villa Ortúzar","Villa Pueyrredón","Villa Real","Villa Riachuelo","Villa Santa Rita","Villa Soldati","Villa Urquiza","Otra"],
-  "Catamarca": ["San Fernando del Valle de Catamarca","Belén","Andalgalá","Tinogasta","Santa María","Otra"],
-  "Chaco": ["Resistencia","Barranqueras","Presidencia Roque Sáenz Peña","Villa Ángela","Charata","Otra"],
-  "Chubut": ["Rawson","Comodoro Rivadavia","Puerto Madryn","Trelew","Esquel","Otra"],
-  "Córdoba": ["Córdoba","Villa María","Río Cuarto","Carlos Paz","San Francisco","Alta Gracia","Jesús María","Otra"],
-  "Corrientes": ["Corrientes","Goya","Mercedes","Paso de los Libres","Curuzú Cuatiá","Otra"],
-  "Entre Ríos": ["Paraná","Concordia","Gualeguaychú","Concepción del Uruguay","Gualeguay","Otra"],
-  "Formosa": ["Formosa","Clorinda","Pirané","Las Lomitas","Otra"],
-  "Jujuy": ["San Salvador de Jujuy","Palpalá","San Pedro","Libertador General San Martín","Otra"],
-  "La Pampa": ["Santa Rosa","General Pico","Toay","Realicó","Otra"],
-  "La Rioja": ["La Rioja","Chilecito","Aimogasta","Chamical","Otra"],
-  "Mendoza": ["Mendoza","Godoy Cruz","Guaymallén","Las Heras","San Rafael","Maipú","Luján de Cuyo","Otra"],
-  "Misiones": ["Posadas","Oberá","Eldorado","Puerto Iguazú","Apóstoles","Otra"],
-  "Neuquén": ["Neuquén","Cutral Có","Plottier","Zapala","San Martín de los Andes","Otra"],
-  "Río Negro": ["Viedma","Bariloche","General Roca","Cipolletti","Allen","Otra"],
-  "Salta": ["Salta","San Ramón de la Nueva Orán","Tartagal","General Güemes","Otra"],
-  "San Juan": ["San Juan","Rawson","Chimbas","Rivadavia","Caucete","Otra"],
-  "San Luis": ["San Luis","Villa Mercedes","Merlo","La Punta","Otra"],
-  "Santa Cruz": ["Río Gallegos","Caleta Olivia","El Calafate","Pico Truncado","Otra"],
-  "Santa Fe": ["Santa Fe","Rosario","Rafaela","Venado Tuerto","Reconquista","Santo Tomé","Otra"],
-  "Santiago del Estero": ["Santiago del Estero","La Banda","Termas de Río Hondo","Añatuya","Otra"],
+  "Buenos Aires": ["La Plata","Mar del Plata","Bahía Blanca","Tandil","San Nicolás","Pilar","Tigre","Quilmes","Avellaneda","Lomas de Zamora","Lanús","Morón","San Isidro","Vicente López","Almirante Brown","Esteban Echeverría","Ezeiza","Merlo","Moreno","Ituzaingó","Hurlingham","Tres de Febrero","San Martín","José C. Paz","Malvinas Argentinas","Berazategui","Florencio Varela","La Matanza","Moreno","San Fernando","San Miguel","Escobar","Campana","Zárate","Luján","Mercedes","Chivilcoy","Olavarría","Azul","Necochea","Tres Arroyos","Pergamino","Junín","Chacabuco","Bragado","9 de Julio","Pehuajó","Trenque Lauquen","Coronel Suárez","Coronel Pringles","Balcarce","General Pueyrredón","General Rodríguez","Marcos Paz","Cañuelas","San Vicente","Presidente Perón","Berisso","Ensenada","La Costa","Pinamar","Villa Gesell","Miramar","Otra"],
+  "CABA": ["Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito","Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta","La Boca","La Paternal","Liniers","Mataderos","Monserrat","Monte Castro","Nueva Pompeya","Núñez","Palermo","Parque Avellaneda","Parque Chacabuco","Parque Chas","Parque Patricios","Puerto Madero","Recoleta","Retiro","Saavedra","San Cristóbal","San Nicolás","San Telmo","Vélez Sársfield","Versalles","Villa Crespo","Villa del Parque","Villa Devoto","Villa General Mitre","Villa Lugano","Villa Luro","Villa Ortúzar","Villa Pueyrredón","Villa Real","Villa Riachuelo","Villa Santa Rita","Villa Soldati","Villa Urquiza","Otra"],
+  "Catamarca": ["San Fernando del Valle de Catamarca","Valle Viejo","Capayán","Belén","Andalgalá","Tinogasta","Santa María","Recreo","Fiambalá","Pomán","La Puerta","El Rodeo","Otra"],
+  "Chaco": ["Resistencia","Barranqueras","Presidencia Roque Sáenz Peña","Villa Ángela","Charata","General San Martín","Juan José Castelli","Machagai","Quitilipi","Las Breñas","Fontana","Puerto Tirol","Makallé","Otra"],
+  "Chubut": ["Rawson","Comodoro Rivadavia","Puerto Madryn","Trelew","Esquel","Sarmiento","Rada Tilly","Gaiman","Dolavon","Trevelin","Puerto Pirámides","Otra"],
+  "Córdoba": ["Córdoba","Villa María","Río Cuarto","Villa Carlos Paz","San Francisco","Alta Gracia","Jesús María","Río Tercero","Villa Dolores","Bell Ville","Marcos Juárez","La Falda","Cosquín","Capilla del Monte","Unquillo","Río Segundo","Arroyito","Cruz del Eje","Villa Allende","Mendiolaza","Otra"],
+  "Corrientes": ["Corrientes","Goya","Mercedes","Paso de los Libres","Curuzú Cuatiá","Santo Tomé","Esquina","Bella Vista","Monte Caseros","Ituzaingó","Saladas","Empedrado","Otra"],
+  "Entre Ríos": ["Paraná","Concordia","Gualeguaychú","Concepción del Uruguay","Gualeguay","Villaguay","Colón","Federación","La Paz","Nogoyá","Victoria","Chajarí","San José","Otra"],
+  "Formosa": ["Formosa","Clorinda","Pirané","Las Lomitas","El Colorado","Ingeniero Juárez","Ibarreta","Laguna Blanca","Otra"],
+  "Jujuy": ["San Salvador de Jujuy","Palpalá","San Pedro de Jujuy","Libertador General San Martín","Perico","La Quiaca","Humahuaca","Tilcara","El Carmen","Monterrico","Otra"],
+  "La Pampa": ["Santa Rosa","General Pico","Toay","Realicó","General Acha","Macachín","Eduardo Castex","Intendente Alvear","Victorica","Otra"],
+  "La Rioja": ["La Rioja","Chilecito","Aimogasta","Chamical","Chepes","Villa Unión","Nonogasta","Olta","Catuna","Otra"],
+  "Mendoza": ["Mendoza","Godoy Cruz","Guaymallén","Las Heras","San Rafael","Maipú","Luján de Cuyo","San Martín","Tunuyán","Rivadavia","Junín","La Paz","Malargüe","General Alvear","Tupungato","Otra"],
+  "Misiones": ["Posadas","Oberá","Eldorado","Puerto Iguazú","Apóstoles","Jardín América","Leandro N. Alem","San Vicente","Montecarlo","Puerto Rico","Aristóbulo del Valle","Wanda","Otra"],
+  "Neuquén": ["Neuquén","Cutral Có","Plottier","Zapala","San Martín de los Andes","Centenario","Villa La Angostura","Chos Malal","Plaza Huincul","Senillosa","Rincón de los Sauces","Otra"],
+  "Río Negro": ["Viedma","San Carlos de Bariloche","General Roca","Cipolletti","Allen","Catriel","El Bolsón","Villa Regina","Cinco Saltos","Luis Beltrán","Choele Choel","Las Grutas","Otra"],
+  "Salta": ["Salta","San Ramón de la Nueva Orán","Tartagal","General Güemes","Metán","Rosario de la Frontera","Cafayate","Joaquín V. González","Embarcación","Cerrillos","Rosario de Lerma","Otra"],
+  "San Juan": ["San Juan","Rawson","Chimbas","Rivadavia","Santa Lucía","Pocito","Caucete","Albardón","Jáchal","25 de Mayo","Sarmiento","Otra"],
+  "San Luis": ["San Luis","Villa Mercedes","Merlo","La Punta","Justo Daract","Villa de la Quebrada","Concarán","Tilisarao","Otra"],
+  "Santa Cruz": ["Río Gallegos","Caleta Olivia","El Calafate","Pico Truncado","Puerto Deseado","Las Heras","Puerto San Julián","Río Turbio","El Chaltén","Otra"],
+  "Santa Fe": ["Santa Fe","Rosario","Rafaela","Venado Tuerto","Reconquista","Santo Tomé","Villa Gobernador Gálvez","Sunchales","Casilda","San Lorenzo","Esperanza","Firmat","Rufino","Villa Constitución","Pérez","Granadero Baigorria","Arroyo Seco","Otra"],
+  "Santiago del Estero": ["Santiago del Estero","La Banda","Termas de Río Hondo","Añatuya","Frías","Fernández","Loreto","Monte Quemado","Clodomira","Otra"],
   "Tierra del Fuego": ["Ushuaia","Río Grande","Tolhuin","Otra"],
-  "Tucumán": ["San Miguel de Tucumán","Yerba Buena","Tafí Viejo","Concepción","Otra"]
+  "Tucumán": ["San Miguel de Tucumán","Yerba Buena","Tafí Viejo","Concepción","Banda del Río Salí","Alderetes","Monteros","Famaillá","Lules","Aguilares","Simoca","Otra"]
 };
 
 function initProvincias() {
@@ -1384,6 +1456,12 @@ function initProvincias() {
 function onProvinciaChange() {
   const prov = document.getElementById('provincia').value;
   const loc = document.getElementById('localidad');
+  const extra = document.getElementById('localidadOtra');
+  if (extra) {
+    extra.classList.add('hidden');
+    extra.value = '';
+    extra.removeAttribute('required');
+  }
   loc.innerHTML = '';
   if (!prov || !AR_UBICACIONES[prov]) {
     loc.disabled = true;
@@ -1401,6 +1479,21 @@ function onProvinciaChange() {
     opt.textContent = l;
     loc.appendChild(opt);
   });
+}
+
+function onLocalidadChange() {
+  const loc = document.getElementById('localidad');
+  const extra = document.getElementById('localidadOtra');
+  if (!extra) return;
+  if (loc.value === 'Otra') {
+    extra.classList.remove('hidden');
+    extra.required = true;
+    extra.focus();
+  } else {
+    extra.classList.add('hidden');
+    extra.value = '';
+    extra.required = false;
+  }
 }
 
 // Init provincias cuando el DOM está listo

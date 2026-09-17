@@ -85,8 +85,20 @@
                             <input type="tel" id="telefono" placeholder="+54 9 11 1234-5678" required>
                         </div>
                         <div class="form-group">
-                            <label for="ubicacion">Ubicación o Domicilio *</label>
-                            <input type="text" id="ubicacion" placeholder="Ciudad, Provincia / Dirección" required>
+                            <label for="provincia">Provincia *</label>
+                            <select id="provincia" required onchange="onProvinciaChange()">
+                                <option value="">Seleccionar provincia</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="localidad">Localidad *</label>
+                            <select id="localidad" required disabled>
+                                <option value="">Primero elegí una provincia</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="direccion">Dirección (opcional)</label>
+                            <input type="text" id="direccion" placeholder="Calle y número">
                         </div>
                         <div class="form-group">
                             <label for="linkedin">LinkedIn (opcional)</label>
@@ -196,26 +208,47 @@
 
                 <div class="form-group">
                     <label>Elegí el estilo preferido de tu CV *</label>
+                    <p class="hint-text">Tocá un estilo para seleccionarlo. Usá “Ver modelo” para previsualizar cómo quedaría.</p>
                     <div class="template-selector" id="templateSelector">
                         <div class="template-option selected" data-template="moderno" onclick="selectTemplate('moderno')">
                             <div class="template-preview moderno-preview"></div>
                             <span>Moderno</span>
+                            <button type="button" class="btn-preview-tpl" onclick="event.stopPropagation(); previewTemplate('moderno')">Ver modelo</button>
                         </div>
                         <div class="template-option" data-template="clasico" onclick="selectTemplate('clasico')">
                             <div class="template-preview clasico-preview"></div>
                             <span>Clásico</span>
+                            <button type="button" class="btn-preview-tpl" onclick="event.stopPropagation(); previewTemplate('clasico')">Ver modelo</button>
                         </div>
                         <div class="template-option" data-template="ejecutivo" onclick="selectTemplate('ejecutivo')">
                             <div class="template-preview ejecutivo-preview"></div>
                             <span>Ejecutivo</span>
+                            <button type="button" class="btn-preview-tpl" onclick="event.stopPropagation(); previewTemplate('ejecutivo')">Ver modelo</button>
                         </div>
                         <div class="template-option" data-template="minimal" onclick="selectTemplate('minimal')">
                             <div class="template-preview minimal-preview"></div>
                             <span>Minimal</span>
+                            <button type="button" class="btn-preview-tpl" onclick="event.stopPropagation(); previewTemplate('minimal')">Ver modelo</button>
                         </div>
                         <div class="template-option" data-template="creativo" onclick="selectTemplate('creativo')">
                             <div class="template-preview creativo-preview"></div>
                             <span>Creativo</span>
+                            <button type="button" class="btn-preview-tpl" onclick="event.stopPropagation(); previewTemplate('creativo')">Ver modelo</button>
+                        </div>
+                        <div class="template-option" data-template="tecnico" onclick="selectTemplate('tecnico')">
+                            <div class="template-preview tecnico-preview"></div>
+                            <span>Técnico</span>
+                            <button type="button" class="btn-preview-tpl" onclick="event.stopPropagation(); previewTemplate('tecnico')">Ver modelo</button>
+                        </div>
+                        <div class="template-option" data-template="sidebar" onclick="selectTemplate('sidebar')">
+                            <div class="template-preview sidebar-preview"></div>
+                            <span>Sidebar</span>
+                            <button type="button" class="btn-preview-tpl" onclick="event.stopPropagation(); previewTemplate('sidebar')">Ver modelo</button>
+                        </div>
+                        <div class="template-option" data-template="pastel" onclick="selectTemplate('pastel')">
+                            <div class="template-preview pastel-preview"></div>
+                            <span>Pastel</span>
+                            <button type="button" class="btn-preview-tpl" onclick="event.stopPropagation(); previewTemplate('pastel')">Ver modelo</button>
                         </div>
                     </div>
                 </div>
@@ -317,6 +350,9 @@
                             <button type="button" class="tpl-btn" data-tpl="ejecutivo" onclick="adminCambiarPlantilla('ejecutivo')">Ejecutivo</button>
                             <button type="button" class="tpl-btn" data-tpl="minimal" onclick="adminCambiarPlantilla('minimal')">Minimal</button>
                             <button type="button" class="tpl-btn" data-tpl="creativo" onclick="adminCambiarPlantilla('creativo')">Creativo</button>
+                            <button type="button" class="tpl-btn" data-tpl="tecnico" onclick="adminCambiarPlantilla('tecnico')">Técnico</button>
+                            <button type="button" class="tpl-btn" data-tpl="sidebar" onclick="adminCambiarPlantilla('sidebar')">Sidebar</button>
+                            <button type="button" class="tpl-btn" data-tpl="pastel" onclick="adminCambiarPlantilla('pastel')">Pastel</button>
                         </div>
                         <div class="cv-actions">
                             <button type="button" class="btn-secondary" onclick="adminRestablecerCV()">↺ Restablecer texto</button>
@@ -345,7 +381,35 @@
                 <button type="button" class="btn-secondary" onclick="cerrarLoginAdmin()">Cancelar</button>
                 <button type="button" class="btn-primary" onclick="verificarAdmin()">Ingresar</button>
             </div>
-            <p class="modal-hint">Contraseña por defecto: <code>lbvadmin</code></p>
+
+        </div>
+    </div>
+
+    <!-- Modal vista previa de plantilla CV -->
+    <div id="templatePreviewModal" class="modal hidden">
+        <div class="modal-content modal-wide">
+            <div class="modal-header-row">
+                <h3 id="tplPreviewTitle">Vista previa del estilo</h3>
+                <button type="button" class="btn-secondary btn-sm" onclick="cerrarPreviewTemplate()">Cerrar</button>
+            </div>
+            <p class="hint-text">Ejemplo ilustrativo. Tu CV usará tus datos reales.</p>
+            <div class="cv-preview-wrapper tpl-modal-preview">
+                <div id="templatePreviewDoc" class="cv-document template-moderno"></div>
+            </div>
+            <div class="modal-actions" style="margin-top:1rem;">
+                <button type="button" class="btn-primary" id="btnElegirPlantilla" onclick="confirmarPlantillaPreview()">Elegir este estilo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal comprobante admin -->
+    <div id="comprobanteModal" class="modal hidden">
+        <div class="modal-content modal-wide">
+            <div class="modal-header-row">
+                <h3>Comprobante de pago</h3>
+                <button type="button" class="btn-secondary btn-sm" onclick="cerrarComprobanteModal()">Cerrar</button>
+            </div>
+            <div id="comprobanteModalBody" class="comprobante-modal-body"></div>
         </div>
     </div>
 

@@ -8,5 +8,5 @@
 window.GOOGLE_SYNC_CONFIG = {
   // Ejemplo: https://script.google.com/macros/s/XXXX/exec
   WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbwrcAm1qo65i1ajGlf13CIucXI6Gv5FAaENjqfpwKxNaDKwmrec_RJL9ywkt4x5JC9BaA/exec',
-  ENABLED: true // poné true cuando pegues la URL
+  ENABLED:true // poné true cuando pegues la URL
 };

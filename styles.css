@@ -692,15 +692,16 @@ body {
     width: 210mm;
     max-width: 210mm;
     min-height: 297mm;
+    height: auto;
     margin: 0 auto;
-    padding: 14mm 16mm;
+    padding: 12mm 14mm;
     box-shadow: var(--shadow-lg);
     font-size: 10.5pt;
-    line-height: 1.45;
+    line-height: 1.4;
     color: #1a202c;
     transition: all 0.3s;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible; /* importante: no recortar contenido al exportar PDF */
 }
 
 #adminCvPreview {
@@ -1042,24 +1043,24 @@ body {
 #adminCvPreview.pdf-exporting {
     width: 210mm !important;
     max-width: 210mm !important;
-    min-height: 297mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    padding: 12mm 14mm !important;
     box-shadow: none !important;
     outline: none !important;
     border: none !important;
     background: #fff !important;
-}
-#adminCvPreview.pdf-exporting .cv-document {
-    width: 210mm !important;
-    max-width: 210mm !important;
-    min-height: 297mm !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    box-sizing: border-box;
+    overflow: visible !important;
 }
 #adminCvPreview.pdf-exporting *:hover {
     background: transparent !important;
+}
+
+/* Evitar que secciones se partan a la mitad en el PDF */
+.cv-item, .cv-section, .cv-header {
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 

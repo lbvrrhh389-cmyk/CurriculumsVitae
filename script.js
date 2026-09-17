@@ -1555,45 +1555,62 @@ function adminDescargarPDF() {
     const data = state.currentSolicitud;
     const nombreArchivo = `CV_${(data.nombre || 'Curriculum').replace(/\s+/g, '_')}.pdf`;
 
-    // Quitar outline de edición temporalmente para el PDF
     const wasEditable = element.getAttribute('contenteditable');
     element.setAttribute('contenteditable', 'false');
     element.classList.add('pdf-exporting');
 
-    const opt = {
-        // Márgenes 0: el propio .cv-document ya tiene padding interno tipo hoja A4
-        margin: [0, 0, 0, 0],
-        filename: nombreArchivo,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            backgroundColor: '#ffffff',
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: 794,  // ~210mm a 96dpi
-            width: 794
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-        html2pdf: { enableLinks: false }
-    };
+    // Medir tamaño real del CV (sin forzar ancho fijo que recorta)
+    const prevOverflow = element.style.overflow;
+    const prevHeight = element.style.height;
+    element.style.overflow = 'visible';
+    element.style.height = 'auto';
 
     const btn = document.querySelector('#adminCVArea .cv-actions .btn-primary');
     const originalText = btn ? btn.textContent : '';
     if (btn) { btn.textContent = 'Generando PDF...'; btn.disabled = true; }
 
-    html2pdf().set(opt).from(element).save().then(() => {
-        element.setAttribute('contenteditable', wasEditable || 'true');
-        element.classList.remove('pdf-exporting');
-        if (btn) { btn.textContent = originalText; btn.disabled = false; }
-    }).catch(err => {
-        console.error(err);
-        element.setAttribute('contenteditable', wasEditable || 'true');
-        element.classList.remove('pdf-exporting');
-        alert('Error al generar el PDF.');
-        if (btn) { btn.textContent = originalText; btn.disabled = false; }
+    // Pequeña espera para que el layout se estabilice antes de capturar
+    requestAnimationFrame(() => {
+        const opt = {
+            // Márgenes pequeños en mm; el contenido ya tiene padding interno
+            margin: [5, 5, 5, 5],
+            filename: nombreArchivo,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: '#ffffff',
+                scrollX: 0,
+                scrollY: 0,
+                // NO fijar width: deja que capture el ancho real del elemento
+                windowWidth: element.scrollWidth,
+                windowHeight: element.scrollHeight,
+                height: element.scrollHeight,
+                x: 0,
+                y: 0
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            // Permitir saltos de página si el CV es largo (evitar-all cortaba el contenido)
+            pagebreak: { mode: ['css', 'legacy'] }
+        };
+
+        html2pdf().set(opt).from(element).save().then(() => {
+            element.setAttribute('contenteditable', wasEditable || 'true');
+            element.classList.remove('pdf-exporting');
+            element.style.overflow = prevOverflow;
+            element.style.height = prevHeight;
+            if (btn) { btn.textContent = originalText; btn.disabled = false; }
+        }).catch(err => {
+            console.error(err);
+            element.setAttribute('contenteditable', wasEditable || 'true');
+            element.classList.remove('pdf-exporting');
+            element.style.overflow = prevOverflow;
+            element.style.height = prevHeight;
+            alert('Error al generar el PDF.');
+            if (btn) { btn.textContent = originalText; btn.disabled = false; }
+        });
     });
 }
 
@@ -1620,7 +1637,7 @@ function adminEnviarWhatsApp() {
     }
 
     const mensaje = encodeURIComponent(
-        `Hola ${data.nombre || ''}! 👋\n\nTe enviamos tu Curriculum Vitae profesional generado por LBV RRHH.\n\n¡Saludos!`
+        `Hola ${data.nombre || ''}! 👋\n\nTe enviamos tu Curriculum Vitae profesional generado por LBV RRHH.\n\nPor favor adjuntá el archivo PDF que descargaste.\n\n¡Saludos!`
     );
 
     // Descargar primero

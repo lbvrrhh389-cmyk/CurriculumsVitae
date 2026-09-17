@@ -1,4 +1,5 @@
 
+
 // LBV RRHH - Generador de CV v3 (Cliente + Admin)
 const ADMIN_PASSWORD = 'lbvadmin';
 const STORAGE_KEY = 'lbv_solicitudes'; // fallback offline local
@@ -379,8 +380,10 @@ function getCroppedPhotoDataURL() {
 function handleComprobanteUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-        alert('El archivo no debe superar los 5MB.');
+    // Hasta 15 MB (se comprime si es imagen antes de enviar a Drive)
+    if (file.size > 15 * 1024 * 1024) {
+        alert('El archivo no debe superar los 15MB. Si es una foto del comprobante, intentá bajar la calidad de la cámara o convertir a PDF más liviano.');
+        e.target.value = '';
         return;
     }
     const reader = new FileReader();
@@ -389,7 +392,8 @@ function handleComprobanteUpload(e) {
         state.comprobanteName = file.name;
         const preview = document.getElementById('comprobantePreview');
         preview.classList.add('has-file');
-        document.getElementById('comprobanteName').textContent = file.name;
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+        document.getElementById('comprobanteName').textContent = file.name + ' (' + sizeMb + ' MB)';
         document.getElementById('btnEnviar').disabled = false;
     };
     reader.readAsDataURL(file);
@@ -660,15 +664,15 @@ async function syncToGoogleSheets(payload) {
     cfg.WEB_APP_URL = url;
 
 
-    // Evitar payloads enormes (límite práctico de Apps Script)
+    // Límite práctico de Apps Script (~50MB teórico; usamos margen seguro ~6MB base64 ≈ 4.5MB archivo)
     const bodyObj = { ...payload };
-    // Apps Script tiene límite de tamaño de petición; si es enorme, omitimos el archivo
-    if (bodyObj.photoBase64 && String(bodyObj.photoBase64).length > 1_500_000) {
-      console.warn('Foto demasiado pesada para enviar a Drive; se omite. Usá una foto más chica.');
+    const MAX_B64 = 6_000_000;
+    if (bodyObj.photoBase64 && String(bodyObj.photoBase64).length > MAX_B64) {
+      console.warn('Foto demasiado pesada para enviar a Drive incluso tras comprimir; se omite.');
       bodyObj.photoBase64 = null;
     }
-    if (bodyObj.comprobanteBase64 && String(bodyObj.comprobanteBase64).length > 1_500_000) {
-      console.warn('Comprobante demasiado pesado; se omite.');
+    if (bodyObj.comprobanteBase64 && String(bodyObj.comprobanteBase64).length > MAX_B64) {
+      console.warn('Comprobante demasiado pesado para enviar a Drive; se omite. Probá un PDF más liviano o una foto con menor resolución.');
       bodyObj.comprobanteBase64 = null;
     }
 
@@ -711,6 +715,62 @@ async function fileToBase64(file) {
     reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+/** Comprime una imagen (File o dataURL) para envío a Drive. PDFs se devuelven sin comprimir. */
+async function compressForDrive(fileOrDataUrl, fileName) {
+  const name = (fileName || 'archivo').toLowerCase();
+  const isPdf = name.endsWith('.pdf') || (typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('data:application/pdf'));
+
+  let dataUrl;
+  if (fileOrDataUrl instanceof Blob) {
+    dataUrl = await fileToBase64(fileOrDataUrl);
+  } else {
+    dataUrl = fileOrDataUrl;
+  }
+
+  if (isPdf) return dataUrl;
+
+  // Solo comprimir imágenes
+  if (!dataUrl || !String(dataUrl).startsWith('data:image')) return dataUrl;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const maxW = 1600;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxW) {
+          h = Math.round(h * (maxW / w));
+          w = maxW;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        // Calidad adaptativa según tamaño
+        let quality = 0.82;
+        let out = canvas.toDataURL('image/jpeg', quality);
+        // Si sigue muy pesado (> ~2.5 MB en base64), bajar calidad
+        if (out.length > 2_500_000) {
+          quality = 0.65;
+          out = canvas.toDataURL('image/jpeg', quality);
+        }
+        if (out.length > 3_500_000) {
+          quality = 0.5;
+          out = canvas.toDataURL('image/jpeg', quality);
+        }
+        resolve(out);
+      } catch (e) {
+        console.warn('No se pudo comprimir imagen', e);
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
   });
 }
 
@@ -805,20 +865,40 @@ async function enviarSolicitud() {
             const compInput = document.getElementById('comprobanteInput');
             if (compInput && compInput.files && compInput.files[0]) {
                 try {
+                    const f = compInput.files[0];
                     comprobanteBase64 = await withTimeout(
-                        fileToBase64(compInput.files[0]),
-                        20000,
-                        'leer comprobante'
+                        compressForDrive(f, f.name),
+                        45000,
+                        'procesar comprobante'
                     );
+                    console.log('Comprobante listo para Drive, tamaño base64:', Math.round(String(comprobanteBase64 || '').length / 1024), 'KB');
                 } catch (e) {
-                    console.warn('No se pudo leer comprobante', e);
+                    console.warn('No se pudo procesar comprobante', e);
+                    try {
+                        comprobanteBase64 = state.comprobanteData || null;
+                    } catch (_) {}
+                }
+            } else if (state.comprobanteData) {
+                try {
+                    comprobanteBase64 = await compressForDrive(state.comprobanteData, state.comprobanteName || 'comprobante.jpg');
+                } catch (e) {
+                    comprobanteBase64 = state.comprobanteData;
                 }
             }
 
-            // Reducir foto si es muy grande (límite práctico Apps Script ~1MB body)
-            let photoB64 = data.photoData || null;
-            if (photoB64 && photoB64.length > 900000) {
-                console.warn('Foto grande: se intenta igual; si falla, subí una más liviana');
+            // Foto: comprimir para Drive
+            let photoB64 = null;
+            if (data.photoData) {
+                try {
+                    photoB64 = await withTimeout(
+                        compressForDrive(data.photoData, id + '_foto.jpg'),
+                        20000,
+                        'comprimir foto'
+                    );
+                } catch (e) {
+                    console.warn(e);
+                    photoB64 = data.photoData;
+                }
             }
 
             googleOk = !!(await syncToGoogleSheets({
@@ -889,58 +969,71 @@ async function enviarSolicitud() {
 }
 
 function generarResumenIA(data) {
+    // Si el cliente escribió un resumen propio suficientemente largo, se respeta
     if (data.resumenUsuario && data.resumenUsuario.length > 40) {
         return data.resumenUsuario;
     }
 
-    const puesto = data.puesto || 'profesional';
-    const objetivo = data.objetivo || 'general';
+    const puesto = (data.puesto || '').trim();
+    const objetivo = (data.objetivo || '').trim();
     const habilidades = data.habilidades || [];
     const expCount = (data.experiencias || []).length;
+    const idiomas = (data.idiomas || '').trim();
+    const herramientas = (data.herramientas || '').trim();
 
+    // Soft skills detectadas para el perfil
+    const softKeys = ['trabajo en equipo','responsabilidad','proactividad','comunicación','adaptabilidad','organización','compromiso','liderazgo','orientación al cliente','resolución de problemas','puntualidad'];
     const softSkills = [];
     habilidades.forEach(h => {
-        const lower = h.toLowerCase();
-        if (COMPETENCY_MAP[lower] || ['trabajo en equipo','responsabilidad','proactividad','comunicación','adaptabilidad','organización','compromiso','liderazgo'].some(k => lower.includes(k))) {
+        const lower = String(h).toLowerCase();
+        if (softKeys.some(k => lower.includes(k)) || COMPETENCY_MAP[lower]) {
             softSkills.push(h);
         }
     });
 
-    // Primera persona: como si el cliente hablara de sí mismo
-    let apertura = '';
+    // Redacción en primera persona, con criterio de un profesional de RRHH
+    let perfil = '';
     if (expCount === 0) {
-        apertura = puesto && puesto !== 'profesional'
-            ? `Soy un/a profesional orientado/a al área de ${puesto}, con sólida formación y una fuerte motivación por desarrollarme en entornos dinámicos.`
-            : `Soy un/a profesional con sólida formación y una fuerte motivación por desarrollarme en entornos dinámicos.`;
+        perfil = puesto
+            ? `Profesional orientado/a al área de ${puesto}, con formación sólida y una marcada disposición para integrarme a entornos laborales exigentes y de constante aprendizaje.`
+            : `Profesional con formación sólida y una marcada disposición para integrarme a entornos laborales exigentes y de constante aprendizaje.`;
     } else if (expCount === 1) {
-        apertura = puesto && puesto !== 'profesional'
-            ? `Cuento con experiencia en ${puesto} y me caracterizo por mi compromiso y capacidad de aprendizaje continuo.`
-            : `Cuento con experiencia laboral y me caracterizo por mi compromiso y capacidad de aprendizaje continuo.`;
+        perfil = puesto
+            ? `Profesional con experiencia concreta en ${puesto}, caracterizado/a por el compromiso, la capacidad de adaptación y la orientación a resultados.`
+            : `Profesional con experiencia laboral concreta, caracterizado/a por el compromiso, la capacidad de adaptación y la orientación a resultados.`;
     } else {
-        apertura = puesto && puesto !== 'profesional'
-            ? `Cuento con una sólida trayectoria en ${puesto} y con demostrada capacidad para aportar valor en equipos de trabajo y alcanzar objetivos.`
-            : `Cuento con una sólida trayectoria profesional y con demostrada capacidad para aportar valor en equipos de trabajo y alcanzar objetivos.`;
+        perfil = puesto
+            ? `Profesional con trayectoria consolidada en ${puesto}, con capacidad demostrada para aportar valor en equipos de trabajo, cumplir objetivos y responder con solvencia a distintos desafíos operativos.`
+            : `Profesional con trayectoria consolidada, con capacidad demostrada para aportar valor en equipos de trabajo, cumplir objetivos y responder con solvencia a distintos desafíos operativos.`;
     }
 
-    let actitudes = '';
+    let competenciasTxt = '';
     if (softSkills.length > 0) {
         const destacadas = softSkills.slice(0, 4).join(', ');
-        actitudes = ` Destaco por mis competencias en ${destacadas.toLowerCase()}.`;
+        competenciasTxt = ` Mis principales fortalezas incluyen ${destacadas.toLowerCase()}, competencias que aplico de manera transversal en el desempeño diario.`;
     } else {
-        actitudes = ' Me defino por una actitud proactiva, orientada a resultados y con un fuerte sentido de la responsabilidad.';
+        competenciasTxt = ' Me caracterizo por una actitud proactiva, responsabilidad en el cumplimiento de tareas y orientación al logro de resultados.';
     }
 
-    let herramientasTxt = data.herramientas ? ` Manejo herramientas como ${data.herramientas}.` : '';
-
-    let orientacion = '';
-    const objLower = (objetivo || '').toLowerCase();
-    if (objLower !== 'general' && objLower.length > 5) {
-        orientacion = ` Busco activamente oportunidades como ${objetivo}, donde pueda aplicar mi experiencia y seguir creciendo profesionalmente.`;
-    } else {
-        orientacion = ' Me encuentro en búsqueda de nuevos desafíos profesionales donde pueda contribuir con mi experiencia y seguir desarrollando mi carrera.';
+    let techTxt = '';
+    if (herramientas) {
+        techTxt = ` Poseo manejo de ${herramientas}.`;
     }
 
-    return `${apertura}${actitudes}${herramientasTxt}${orientacion}`;
+    let idiomasTxt = '';
+    if (idiomas) {
+        idiomasTxt = ` Cuento con conocimientos de ${idiomas}.`;
+    }
+
+    let cierre = '';
+    const objLower = objetivo.toLowerCase();
+    if (objLower && objLower !== 'general' && objetivo.length > 5) {
+        cierre = ` Actualmente me encuentro en búsqueda de oportunidades vinculadas a ${objetivo}, donde pueda aplicar mi experiencia, aportar a los objetivos de la organización y continuar desarrollando mi carrera profesional.`;
+    } else {
+        cierre = ' Actualmente me encuentro en búsqueda de nuevos desafíos profesionales donde pueda contribuir con mi experiencia y seguir creciendo dentro de la organización.';
+    }
+
+    return `${perfil}${competenciasTxt}${techTxt}${idiomasTxt}${cierre}`;
 }
 
 function transformarACompetencias(habilidades) {
@@ -1468,12 +1561,23 @@ function adminDescargarPDF() {
     element.classList.add('pdf-exporting');
 
     const opt = {
-        margin: [8, 8, 8, 8],
+        // Márgenes 0: el propio .cv-document ya tiene padding interno tipo hoja A4
+        margin: [0, 0, 0, 0],
         filename: nombreArchivo,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: 794,  // ~210mm a 96dpi
+            width: 794
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        html2pdf: { enableLinks: false }
     };
 
     const btn = document.querySelector('#adminCVArea .cv-actions .btn-primary');

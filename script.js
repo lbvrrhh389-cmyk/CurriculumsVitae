@@ -670,12 +670,13 @@ async function syncToGoogleSheets(payload) {
 
     // Evitar payloads enormes (límite práctico de Apps Script)
     const bodyObj = { ...payload };
-    if (bodyObj.photoBase64 && String(bodyObj.photoBase64).length > 900000) {
-      console.warn('Foto muy pesada para Sheets/Drive; se envía sin foto');
+    // Apps Script tiene límite de tamaño de petición; si es enorme, omitimos el archivo
+    if (bodyObj.photoBase64 && String(bodyObj.photoBase64).length > 1_500_000) {
+      console.warn('Foto demasiado pesada para enviar a Drive; se omite. Usá una foto más chica.');
       bodyObj.photoBase64 = null;
     }
-    if (bodyObj.comprobanteBase64 && String(bodyObj.comprobanteBase64).length > 900000) {
-      console.warn('Comprobante muy pesado; se envía sin archivo');
+    if (bodyObj.comprobanteBase64 && String(bodyObj.comprobanteBase64).length > 1_500_000) {
+      console.warn('Comprobante demasiado pesado; se omite.');
       bodyObj.comprobanteBase64 = null;
     }
 
@@ -804,60 +805,31 @@ async function enviarSolicitud() {
         );
         console.log('Solicitud guardada en Firestore', id);
 
-        // 2) Subir archivos (opcional; no bloquea el éxito del envío)
-        try {
-            if (data.photoData && data.photoData.length < 2_500_000) {
-                photoUrl = await withTimeout(
-                    uploadDataUrl('fotos/' + id + '.jpg', data.photoData),
-                    20000,
-                    'subir foto'
-                );
-            } else if (data.photoData) {
-                console.warn('Foto muy pesada, se omite Storage');
-            }
-        } catch (e) {
-            console.warn('Foto no subida:', e.message || e);
-        }
-
-        try {
-            const compInput = document.getElementById('comprobanteInput');
-            if (compInput && compInput.files && compInput.files[0]) {
-                const f = compInput.files[0];
-                const ext = (f.name.split('.').pop() || 'bin').toLowerCase();
-                comprobanteUrl = await withTimeout(
-                    uploadFile('comprobantes/' + id + '.' + ext, f),
-                    20000,
-                    'subir comprobante'
-                );
-            }
-        } catch (e) {
-            console.warn('Comprobante no subido:', e.message || e);
-        }
-
-        // Actualizar doc con URLs si se subieron
-        if (photoUrl || comprobanteUrl) {
-            try {
-                await db.collection('solicitudes').doc(id).update({
-                    photoUrl: photoUrl || null,
-                    comprobanteUrl: comprobanteUrl || null,
-                });
-            } catch (e) {
-                console.warn('No se pudieron guardar las URLs de archivos', e);
-            }
-        }
-
-        // Sincronizar a Google Sheets + Drive (no bloquea el éxito si falla)
+        // Archivos → Google Drive (vía Apps Script), NO Firebase Storage
+        // (evita el error CORS de Storage desde GitHub Pages)
+        let googleOk = false;
         try {
             let comprobanteBase64 = null;
             const compInput = document.getElementById('comprobanteInput');
             if (compInput && compInput.files && compInput.files[0]) {
                 try {
-                    comprobanteBase64 = await withTimeout(fileToBase64(compInput.files[0]), 20000, 'leer comprobante');
+                    comprobanteBase64 = await withTimeout(
+                        fileToBase64(compInput.files[0]),
+                        20000,
+                        'leer comprobante'
+                    );
                 } catch (e) {
-                    console.warn(e);
+                    console.warn('No se pudo leer comprobante', e);
                 }
             }
-            await syncToGoogleSheets({
+
+            // Reducir foto si es muy grande (límite práctico Apps Script ~1MB body)
+            let photoB64 = data.photoData || null;
+            if (photoB64 && photoB64.length > 900000) {
+                console.warn('Foto grande: se intenta igual; si falla, subí una más liviana');
+            }
+
+            googleOk = !!(await syncToGoogleSheets({
                 id: id,
                 nombre: data.nombre || '',
                 email: data.email || '',
@@ -869,14 +841,27 @@ async function enviarSolicitud() {
                 puesto: data.puesto || '',
                 objetivo: data.objetivo || '',
                 template: data.template || '',
-                photoBase64: data.photoData || null,
+                photoBase64: photoB64,
                 photoName: id + '_foto.jpg',
                 comprobanteBase64: comprobanteBase64,
                 comprobanteName: data.comprobanteName || (id + '_comprobante'),
-            });
+            }));
+
+            // Marcar en Firestore que los archivos van a Drive
+            try {
+                await db.collection('solicitudes').doc(id).update({
+                    archivosEn: googleOk ? 'Google Drive' : 'pendiente',
+                    photoUrl: null,
+                    comprobanteUrl: null,
+                });
+            } catch (e) {}
         } catch (e) {
             console.warn('Sync Google omitido', e);
         }
+
+        const googleEnabled = window.GOOGLE_SYNC_CONFIG && window.GOOGLE_SYNC_CONFIG.ENABLED &&
+            window.GOOGLE_SYNC_CONFIG.WEB_APP_URL &&
+            !String(window.GOOGLE_SYNC_CONFIG.WEB_APP_URL).includes('PEGAR');
 
         document.getElementById('successDetails').innerHTML =
             '<p><strong>Nombre:</strong> ' + data.nombre + '</p>' +
@@ -885,10 +870,12 @@ async function enviarSolicitud() {
             '<p><strong>Profesión:</strong> ' + (data.puesto || '—') + '</p>' +
             '<p><strong>Comprobante:</strong> ' + (data.comprobanteName || 'Adjuntado') + '</p>' +
             '<p><strong>Nº de solicitud:</strong> ' + id + '</p>' +
-            '<p><strong>Guardado en:</strong> Firebase' +
-            ((window.GOOGLE_SYNC_CONFIG && window.GOOGLE_SYNC_CONFIG.ENABLED) ? ' + Google Sheets/Drive' : '') +
-            '</p>' +
-            (photoUrl ? '' : '<p><em>Nota: la foto no se subió a Storage (revisá reglas de Storage).</em></p>');
+            '<p><strong>Datos:</strong> Firebase</p>' +
+            '<p><strong>Archivos (foto/comprobante):</strong> ' +
+            (googleEnabled
+                ? 'Google Drive / Sheets'
+                : 'No configurado — activá google-config.js') +
+            '</p>';
 
         document.getElementById('step5').classList.remove('active');
         state.currentStep = 6;

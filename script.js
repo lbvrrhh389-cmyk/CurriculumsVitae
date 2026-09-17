@@ -658,6 +658,69 @@ function getFormData() {
 }
 
 // ===== Guardar solicitud (cliente NO ve el CV) =====
+
+/** Sincroniza solicitud a Google Sheets + Drive (Apps Script) */
+async function syncToGoogleSheets(payload) {
+  try {
+    const cfg = window.GOOGLE_SYNC_CONFIG || {};
+    if (!cfg.ENABLED || !cfg.WEB_APP_URL || String(cfg.WEB_APP_URL).includes('PEGAR')) {
+      console.log('Google Sheets sync desactivado o sin URL. Revisá google-config.js');
+      return null;
+    }
+
+    // Evitar payloads enormes (límite práctico de Apps Script)
+    const bodyObj = { ...payload };
+    if (bodyObj.photoBase64 && String(bodyObj.photoBase64).length > 900000) {
+      console.warn('Foto muy pesada para Sheets/Drive; se envía sin foto');
+      bodyObj.photoBase64 = null;
+    }
+    if (bodyObj.comprobanteBase64 && String(bodyObj.comprobanteBase64).length > 900000) {
+      console.warn('Comprobante muy pesado; se envía sin archivo');
+      bodyObj.comprobanteBase64 = null;
+    }
+
+    const body = JSON.stringify(bodyObj);
+
+    // Intento 1: cors (si Apps Script responde bien)
+    try {
+      const res = await fetch(cfg.WEB_APP_URL, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body,
+      });
+      const text = await res.text();
+      console.log('Google Sheets respuesta:', res.status, text.slice(0, 200));
+      return true;
+    } catch (corsErr) {
+      console.warn('CORS/fetch normal falló, reintento no-cors', corsErr);
+    }
+
+    // Intento 2: no-cors (el servidor igual puede procesar el POST)
+    await fetch(cfg.WEB_APP_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body,
+    });
+    console.log('Solicitud enviada a Google Sheets/Drive (no-cors)');
+    return true;
+  } catch (e) {
+    console.warn('No se pudo sincronizar con Google Sheets', e);
+    return null;
+  }
+}
+
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 async function withTimeout(promise, ms, label) {
     let timer;
     const timeout = new Promise((_, reject) => {
@@ -783,6 +846,38 @@ async function enviarSolicitud() {
             }
         }
 
+        // Sincronizar a Google Sheets + Drive (no bloquea el éxito si falla)
+        try {
+            let comprobanteBase64 = null;
+            const compInput = document.getElementById('comprobanteInput');
+            if (compInput && compInput.files && compInput.files[0]) {
+                try {
+                    comprobanteBase64 = await withTimeout(fileToBase64(compInput.files[0]), 20000, 'leer comprobante');
+                } catch (e) {
+                    console.warn(e);
+                }
+            }
+            await syncToGoogleSheets({
+                id: id,
+                nombre: data.nombre || '',
+                email: data.email || '',
+                telefono: data.telefono || '',
+                provincia: data.provincia || '',
+                localidad: data.localidad || '',
+                direccion: data.direccion || '',
+                ubicacion: data.ubicacion || '',
+                puesto: data.puesto || '',
+                objetivo: data.objetivo || '',
+                template: data.template || '',
+                photoBase64: data.photoData || null,
+                photoName: id + '_foto.jpg',
+                comprobanteBase64: comprobanteBase64,
+                comprobanteName: data.comprobanteName || (id + '_comprobante'),
+            });
+        } catch (e) {
+            console.warn('Sync Google omitido', e);
+        }
+
         document.getElementById('successDetails').innerHTML =
             '<p><strong>Nombre:</strong> ' + data.nombre + '</p>' +
             '<p><strong>Email:</strong> ' + data.email + '</p>' +
@@ -790,7 +885,9 @@ async function enviarSolicitud() {
             '<p><strong>Profesión:</strong> ' + (data.puesto || '—') + '</p>' +
             '<p><strong>Comprobante:</strong> ' + (data.comprobanteName || 'Adjuntado') + '</p>' +
             '<p><strong>Nº de solicitud:</strong> ' + id + '</p>' +
-            '<p><strong>Guardado en:</strong> Firebase (nube)</p>' +
+            '<p><strong>Guardado en:</strong> Firebase' +
+            ((window.GOOGLE_SYNC_CONFIG && window.GOOGLE_SYNC_CONFIG.ENABLED) ? ' + Google Sheets/Drive' : '') +
+            '</p>' +
             (photoUrl ? '' : '<p><em>Nota: la foto no se subió a Storage (revisá reglas de Storage).</em></p>');
 
         document.getElementById('step5').classList.remove('active');
@@ -1415,70 +1512,106 @@ function cerrarAdmin() {
 }
 
 // ===== Provincias y localidades (Argentina) =====
-const AR_UBICACIONES = {
-  "Buenos Aires": ["La Plata","Mar del Plata","Bahía Blanca","Tandil","San Nicolás","Pilar","Tigre","Quilmes","Avellaneda","Lomas de Zamora","Lanús","Morón","San Isidro","Vicente López","Almirante Brown","Esteban Echeverría","Ezeiza","Merlo","Moreno","Ituzaingó","Hurlingham","Tres de Febrero","San Martín","José C. Paz","Malvinas Argentinas","Berazategui","Florencio Varela","La Matanza","Moreno","San Fernando","San Miguel","Escobar","Campana","Zárate","Luján","Mercedes","Chivilcoy","Olavarría","Azul","Necochea","Tres Arroyos","Pergamino","Junín","Chacabuco","Bragado","9 de Julio","Pehuajó","Trenque Lauquen","Coronel Suárez","Coronel Pringles","Balcarce","General Pueyrredón","General Rodríguez","Marcos Paz","Cañuelas","San Vicente","Presidente Perón","Berisso","Ensenada","La Costa","Pinamar","Villa Gesell","Miramar","Otra"],
-  "CABA": ["Agronomía","Almagro","Balvanera","Barracas","Belgrano","Boedo","Caballito","Chacarita","Coghlan","Colegiales","Constitución","Flores","Floresta","La Boca","La Paternal","Liniers","Mataderos","Monserrat","Monte Castro","Nueva Pompeya","Núñez","Palermo","Parque Avellaneda","Parque Chacabuco","Parque Chas","Parque Patricios","Puerto Madero","Recoleta","Retiro","Saavedra","San Cristóbal","San Nicolás","San Telmo","Vélez Sársfield","Versalles","Villa Crespo","Villa del Parque","Villa Devoto","Villa General Mitre","Villa Lugano","Villa Luro","Villa Ortúzar","Villa Pueyrredón","Villa Real","Villa Riachuelo","Villa Santa Rita","Villa Soldati","Villa Urquiza","Otra"],
-  "Catamarca": ["San Fernando del Valle de Catamarca","Valle Viejo","Capayán","Belén","Andalgalá","Tinogasta","Santa María","Recreo","Fiambalá","Pomán","La Puerta","El Rodeo","Otra"],
-  "Chaco": ["Resistencia","Barranqueras","Presidencia Roque Sáenz Peña","Villa Ángela","Charata","General San Martín","Juan José Castelli","Machagai","Quitilipi","Las Breñas","Fontana","Puerto Tirol","Makallé","Otra"],
-  "Chubut": ["Rawson","Comodoro Rivadavia","Puerto Madryn","Trelew","Esquel","Sarmiento","Rada Tilly","Gaiman","Dolavon","Trevelin","Puerto Pirámides","Otra"],
-  "Córdoba": ["Córdoba","Villa María","Río Cuarto","Villa Carlos Paz","San Francisco","Alta Gracia","Jesús María","Río Tercero","Villa Dolores","Bell Ville","Marcos Juárez","La Falda","Cosquín","Capilla del Monte","Unquillo","Río Segundo","Arroyito","Cruz del Eje","Villa Allende","Mendiolaza","Otra"],
-  "Corrientes": ["Corrientes","Goya","Mercedes","Paso de los Libres","Curuzú Cuatiá","Santo Tomé","Esquina","Bella Vista","Monte Caseros","Ituzaingó","Saladas","Empedrado","Otra"],
-  "Entre Ríos": ["Paraná","Concordia","Gualeguaychú","Concepción del Uruguay","Gualeguay","Villaguay","Colón","Federación","La Paz","Nogoyá","Victoria","Chajarí","San José","Otra"],
-  "Formosa": ["Formosa","Clorinda","Pirané","Las Lomitas","El Colorado","Ingeniero Juárez","Ibarreta","Laguna Blanca","Otra"],
-  "Jujuy": ["San Salvador de Jujuy","Palpalá","San Pedro de Jujuy","Libertador General San Martín","Perico","La Quiaca","Humahuaca","Tilcara","El Carmen","Monterrico","Otra"],
-  "La Pampa": ["Santa Rosa","General Pico","Toay","Realicó","General Acha","Macachín","Eduardo Castex","Intendente Alvear","Victorica","Otra"],
-  "La Rioja": ["La Rioja","Chilecito","Aimogasta","Chamical","Chepes","Villa Unión","Nonogasta","Olta","Catuna","Otra"],
-  "Mendoza": ["Mendoza","Godoy Cruz","Guaymallén","Las Heras","San Rafael","Maipú","Luján de Cuyo","San Martín","Tunuyán","Rivadavia","Junín","La Paz","Malargüe","General Alvear","Tupungato","Otra"],
-  "Misiones": ["Posadas","Oberá","Eldorado","Puerto Iguazú","Apóstoles","Jardín América","Leandro N. Alem","San Vicente","Montecarlo","Puerto Rico","Aristóbulo del Valle","Wanda","Otra"],
-  "Neuquén": ["Neuquén","Cutral Có","Plottier","Zapala","San Martín de los Andes","Centenario","Villa La Angostura","Chos Malal","Plaza Huincul","Senillosa","Rincón de los Sauces","Otra"],
-  "Río Negro": ["Viedma","San Carlos de Bariloche","General Roca","Cipolletti","Allen","Catriel","El Bolsón","Villa Regina","Cinco Saltos","Luis Beltrán","Choele Choel","Las Grutas","Otra"],
-  "Salta": ["Salta","San Ramón de la Nueva Orán","Tartagal","General Güemes","Metán","Rosario de la Frontera","Cafayate","Joaquín V. González","Embarcación","Cerrillos","Rosario de Lerma","Otra"],
-  "San Juan": ["San Juan","Rawson","Chimbas","Rivadavia","Santa Lucía","Pocito","Caucete","Albardón","Jáchal","25 de Mayo","Sarmiento","Otra"],
-  "San Luis": ["San Luis","Villa Mercedes","Merlo","La Punta","Justo Daract","Villa de la Quebrada","Concarán","Tilisarao","Otra"],
-  "Santa Cruz": ["Río Gallegos","Caleta Olivia","El Calafate","Pico Truncado","Puerto Deseado","Las Heras","Puerto San Julián","Río Turbio","El Chaltén","Otra"],
-  "Santa Fe": ["Santa Fe","Rosario","Rafaela","Venado Tuerto","Reconquista","Santo Tomé","Villa Gobernador Gálvez","Sunchales","Casilda","San Lorenzo","Esperanza","Firmat","Rufino","Villa Constitución","Pérez","Granadero Baigorria","Arroyo Seco","Otra"],
-  "Santiago del Estero": ["Santiago del Estero","La Banda","Termas de Río Hondo","Añatuya","Frías","Fernández","Loreto","Monte Quemado","Clodomira","Otra"],
-  "Tierra del Fuego": ["Ushuaia","Río Grande","Tolhuin","Otra"],
-  "Tucumán": ["San Miguel de Tucumán","Yerba Buena","Tafí Viejo","Concepción","Banda del Río Salí","Alderetes","Monteros","Famaillá","Lules","Aguilares","Simoca","Otra"]
-};
+// ===== Provincias y localidades (API oficial Georef Argentina) =====
+// Docs: https://apis.datos.gob.ar/georef
+const GEOREF_BASE = 'https://apis.datos.gob.ar/georef/api';
+let _provinciasCache = [];
+let _localidadesCache = {};
 
-function initProvincias() {
+async function initProvincias() {
   const sel = document.getElementById('provincia');
-  if (!sel || sel.options.length > 1) return;
-  Object.keys(AR_UBICACIONES).sort((a, b) => a.localeCompare(b, 'es')).forEach((p) => {
-    const opt = document.createElement('option');
-    opt.value = p;
-    opt.textContent = p;
-    sel.appendChild(opt);
-  });
+  if (!sel) return;
+
+  // Evitar duplicar si ya cargó
+  if (sel.options.length > 1 && _provinciasCache.length) return;
+
+  sel.innerHTML = '<option value="">Cargando provincias...</option>';
+  sel.disabled = true;
+
+  try {
+    const res = await fetch(GEOREF_BASE + '/provincias?max=30&orden=nombre');
+    const json = await res.json();
+    const list = (json.provincias || []).map((p) => p.nombre).sort((a, b) => a.localeCompare(b, 'es'));
+    _provinciasCache = list;
+
+    sel.innerHTML = '<option value="">Seleccionar provincia</option>';
+    list.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+    sel.disabled = false;
+  } catch (e) {
+    console.error('No se pudieron cargar provincias', e);
+    // Fallback mínimo offline
+    const fallback = ['Buenos Aires','Ciudad Autónoma de Buenos Aires','Catamarca','Chaco','Chubut','Córdoba','Corrientes','Entre Ríos','Formosa','Jujuy','La Pampa','La Rioja','Mendoza','Misiones','Neuquén','Río Negro','Salta','San Juan','San Luis','Santa Cruz','Santa Fe','Santiago del Estero','Tierra del Fuego','Tucumán'];
+    sel.innerHTML = '<option value="">Seleccionar provincia</option>';
+    fallback.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+    sel.disabled = false;
+  }
 }
 
-function onProvinciaChange() {
+async function onProvinciaChange() {
   const prov = document.getElementById('provincia').value;
   const loc = document.getElementById('localidad');
   const extra = document.getElementById('localidadOtra');
   if (extra) {
     extra.classList.add('hidden');
     extra.value = '';
-    extra.removeAttribute('required');
+    extra.required = false;
   }
+
   loc.innerHTML = '';
-  if (!prov || !AR_UBICACIONES[prov]) {
+  if (!prov) {
     loc.disabled = true;
     loc.innerHTML = '<option value="">Primero elegí una provincia</option>';
     return;
   }
-  loc.disabled = false;
-  const ph = document.createElement('option');
-  ph.value = '';
-  ph.textContent = 'Seleccionar localidad';
-  loc.appendChild(ph);
-  AR_UBICACIONES[prov].forEach((l) => {
-    const opt = document.createElement('option');
-    opt.value = l;
-    opt.textContent = l;
-    loc.appendChild(opt);
-  });
+
+  loc.disabled = true;
+  loc.innerHTML = '<option value="">Cargando localidades...</option>';
+
+  try {
+    let list = _localidadesCache[prov];
+    if (!list) {
+      // max=5000 trae el listado completo de la provincia
+      const url = GEOREF_BASE + '/localidades?provincia=' + encodeURIComponent(prov) + '&max=5000&orden=nombre&campos=nombre';
+      const res = await fetch(url);
+      const json = await res.json();
+      const names = (json.localidades || []).map((l) => l.nombre);
+      // únicos
+      list = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'es'));
+      _localidadesCache[prov] = list;
+    }
+
+    loc.innerHTML = '<option value="">Seleccionar localidad</option>';
+    list.forEach((name) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      loc.appendChild(opt);
+    });
+    const otra = document.createElement('option');
+    otra.value = 'Otra';
+    otra.textContent = 'Otra (escribir a mano)';
+    loc.appendChild(otra);
+    loc.disabled = false;
+    console.log('Localidades cargadas para', prov, ':', list.length);
+  } catch (e) {
+    console.error('Error cargando localidades', e);
+    loc.innerHTML = '<option value="">Error al cargar — usá "Otra"</option>';
+    const otra = document.createElement('option');
+    otra.value = 'Otra';
+    otra.textContent = 'Otra (escribir a mano)';
+    loc.appendChild(otra);
+    loc.disabled = false;
+  }
 }
 
 function onLocalidadChange() {
@@ -1500,7 +1633,9 @@ function onLocalidadChange() {
 document.addEventListener('DOMContentLoaded', () => {
   initProvincias();
 });
-initProvincias();
+if (document.readyState !== 'loading') {
+  initProvincias();
+}
 
 // ===== Preview de plantillas =====
 let _previewTplName = 'moderno';

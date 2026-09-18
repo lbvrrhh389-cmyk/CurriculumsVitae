@@ -1849,29 +1849,67 @@ function adminCambiarPlantilla(nombre) {
 
 function adminDescargarPDF() {
     if (!state.currentSolicitud) return;
-    const element = document.getElementById('adminCvPreview');
+    const source = document.getElementById('adminCvPreview');
     const data = state.currentSolicitud;
     const nombreArchivo = `CV_${(data.nombre || 'Curriculum').replace(/\s+/g, '_')}.pdf`;
-
-    const wasEditable = element.getAttribute('contenteditable');
-    element.setAttribute('contenteditable', 'false');
-    element.classList.add('pdf-exporting');
-
-    // Medir tamaño real del CV (sin forzar ancho fijo que recorta)
-    const prevOverflow = element.style.overflow;
-    const prevHeight = element.style.height;
-    element.style.overflow = 'visible';
-    element.style.height = 'auto';
 
     const btn = document.querySelector('#adminCVArea .cv-actions .btn-primary');
     const originalText = btn ? btn.textContent : '';
     if (btn) { btn.textContent = 'Generando PDF...'; btn.disabled = true; }
 
-    // Pequeña espera para que el layout se estabilice antes de capturar
+    // Clon aislado fuera del layout (evita el desfase a la derecha por flex/scroll del panel)
+    const clone = source.cloneNode(true);
+    clone.id = 'lbv-pdf-clone';
+    clone.removeAttribute('contenteditable');
+    clone.classList.add('cv-document', 'pdf-exporting');
+    clone.classList.remove('move-mode');
+    // Quitar outlines/hover de edición
+    clone.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+
+    const host = document.createElement('div');
+    host.id = 'lbv-pdf-host';
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = [
+        'position:fixed',
+        'left:0',
+        'top:0',
+        'width:210mm',
+        'margin:0',
+        'padding:0',
+        'background:#fff',
+        'z-index:-9999',
+        'opacity:1',
+        'pointer-events:none',
+        'overflow:visible'
+    ].join(';');
+
+    clone.style.cssText = [
+        'width:210mm',
+        'max-width:210mm',
+        'min-height:297mm',
+        'height:auto',
+        'margin:0',
+        'padding:12mm 14mm',
+        'box-shadow:none',
+        'outline:none',
+        'border:none',
+        'background:#ffffff',
+        'box-sizing:border-box',
+        'overflow:visible',
+        'position:relative',
+        'left:0',
+        'top:0',
+        'transform:none'
+    ].join(';');
+
+    host.appendChild(clone);
+    document.body.appendChild(host);
+
+    // Esperar un frame para layout del clon
     requestAnimationFrame(() => {
         const opt = {
-            // Márgenes pequeños en mm; el contenido ya tiene padding interno
-            margin: [5, 5, 5, 5],
+            // Márgenes 0: el padding del CV ya centra el contenido dentro de A4
+            margin: [0, 0, 0, 0],
             filename: nombreArchivo,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
@@ -1882,32 +1920,28 @@ function adminDescargarPDF() {
                 backgroundColor: '#ffffff',
                 scrollX: 0,
                 scrollY: 0,
-                // NO fijar width: deja que capture el ancho real del elemento
-                windowWidth: element.scrollWidth,
-                windowHeight: element.scrollHeight,
-                height: element.scrollHeight,
                 x: 0,
-                y: 0
+                y: 0,
+                windowWidth: Math.ceil(clone.scrollWidth),
+                windowHeight: Math.ceil(clone.scrollHeight),
+                width: Math.ceil(clone.scrollWidth),
+                height: Math.ceil(clone.scrollHeight)
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            // Permitir saltos de página si el CV es largo (evitar-all cortaba el contenido)
             pagebreak: { mode: ['css', 'legacy'] }
         };
 
-        html2pdf().set(opt).from(element).save().then(() => {
-            element.setAttribute('contenteditable', wasEditable || 'true');
-            element.classList.remove('pdf-exporting');
-            element.style.overflow = prevOverflow;
-            element.style.height = prevHeight;
+        const cleanup = () => {
+            try { host.remove(); } catch (e) {}
             if (btn) { btn.textContent = originalText; btn.disabled = false; }
+        };
+
+        html2pdf().set(opt).from(clone).save().then(() => {
+            cleanup();
         }).catch(err => {
             console.error(err);
-            element.setAttribute('contenteditable', wasEditable || 'true');
-            element.classList.remove('pdf-exporting');
-            element.style.overflow = prevOverflow;
-            element.style.height = prevHeight;
+            cleanup();
             alert('Error al generar el PDF.');
-            if (btn) { btn.textContent = originalText; btn.disabled = false; }
         });
     });
 }

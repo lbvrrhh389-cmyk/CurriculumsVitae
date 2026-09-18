@@ -1040,23 +1040,15 @@ body {
     cursor: text;
 }
 
-#adminCvPreview.pdf-exporting,
-#lbv-pdf-clone.pdf-exporting {
-    width: 210mm !important;
-    max-width: 210mm !important;
-    min-height: 297mm !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 12mm 14mm !important;
+#adminCvPreview.pdf-exporting {
     box-shadow: none !important;
     outline: none !important;
     border: none !important;
     background: #fff !important;
     overflow: visible !important;
-    position: relative !important;
-    left: 0 !important;
-    top: 0 !important;
     transform: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 #lbv-pdf-host {
     position: fixed !important;

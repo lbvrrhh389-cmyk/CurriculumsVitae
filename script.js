@@ -1018,72 +1018,214 @@ async function enviarSolicitud() {
     }
 }
 
+/** Corrige ortografía básica en español: acentos frecuentes, mayúsculas de oración y nombres propios comunes. */
+function corregirOrtografiaES(texto) {
+    if (!texto || typeof texto !== 'string') return texto || '';
+    let t = texto.replace(/\s+/g, ' ').trim();
+
+    const mapa = {
+        'area': 'área', 'areas': 'áreas', 'telefono': 'teléfono', 'telefonos': 'teléfonos',
+        'curriculum': 'currículum', 'curriculums': 'currículums', 'educacion': 'educación',
+        'formacion': 'formación', 'organizacion': 'organización', 'comunicacion': 'comunicación',
+        'atencion': 'atención', 'resolucion': 'resolución', 'administracion': 'administración',
+        'direccion': 'dirección', 'informacion': 'información', 'profesion': 'profesión',
+        'rapido': 'rápido', 'rapida': 'rápida', 'facil': 'fácil', 'util': 'útil',
+        'ultimo': 'último', 'ultima': 'última', 'publico': 'público', 'publica': 'pública',
+        'tecnico': 'técnico', 'tecnica': 'técnica', 'practico': 'práctico', 'practica': 'práctica',
+        'logistica': 'logística', 'mecanica': 'mecánica', 'electronica': 'electrónica',
+        'ingles': 'inglés', 'frances': 'francés', 'portugues': 'portugués',
+        'tambien': 'también', 'ademas': 'además', 'asi': 'así', 'mas': 'más',
+        'ano': 'año', 'anos': 'años', 'codigo': 'código', 'metodo': 'método',
+        'pagina': 'página', 'linea': 'línea', 'maquina': 'máquina', 'maquinas': 'máquinas',
+        'camion': 'camión', 'region': 'región', 'solucion': 'solución', 'produccion': 'producción',
+        'operacion': 'operación', 'capacitacion': 'capacitación', 'negociacion': 'negociación',
+        'relacion': 'relación', 'interes': 'interés', 'exito': 'éxito', 'etica': 'ética',
+        'accion': 'acción', 'acciones': 'acciones', 'decision': 'decisión',
+        'orientacion': 'orientación', 'presentacion': 'presentación', 'descripcion': 'descripción',
+        'contaduria': 'contaduría', 'gastronomia': 'gastronomía', 'psicologia': 'psicología',
+        'pedagogia': 'pedagogía', 'filosofia': 'filosofía', 'matematica': 'matemática',
+        'matematicas': 'matemáticas', 'fisica': 'física', 'quimica': 'química',
+        'medico': 'médico', 'medica': 'médica', 'musica': 'música',
+        'analisis': 'análisis', 'sintesis': 'síntesis', 'enfasis': 'énfasis',
+        'dia': 'día', 'dias': 'días', 'companero': 'compañero', 'companera': 'compañera',
+        'compania': 'compañía', 'senor': 'señor', 'senora': 'señora',
+        'cordoba': 'córdoba', 'tecnologia': 'tecnología', 'tecnologias': 'tecnologías',
+        'innovacion': 'innovación', 'gestion': 'gestión', 'operativo': 'operativo',
+    };
+
+    t = t.replace(/\b([A-Za-zÁÉÍÓÚÜáéíóúüñÑ]+)\b/g, (word) => {
+        const key = word.toLowerCase();
+        const keySin = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const rep = mapa[key] || mapa[keySin];
+        if (!rep) return word;
+        if (word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase()) {
+            return rep.charAt(0).toUpperCase() + rep.slice(1);
+        }
+        return rep;
+    });
+
+    const propios = {
+        'microsoft': 'Microsoft', 'excel': 'Excel', 'word': 'Word', 'powerpoint': 'PowerPoint',
+        'google': 'Google', 'linkedin': 'LinkedIn', 'whatsapp': 'WhatsApp',
+        'argentina': 'Argentina', 'buenos aires': 'Buenos Aires',
+    };
+    Object.keys(propios).forEach((k) => {
+        const re = new RegExp('\\b' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
+        t = t.replace(re, propios[k]);
+    });
+
+    // Mayúscula al inicio y después de . ! ?
+    t = t.replace(/(^|[.!?]\s+)([a-záéíóúüñ])/g, (m, p1, p2) => p1 + p2.toUpperCase());
+    if (t.length) t = t.charAt(0).toUpperCase() + t.slice(1);
+
+    t = t.replace(/\s+([.,;:!?])/g, '$1');
+    t = t.replace(/([.,;:!?])(?=[A-Za-zÁÉÍÓÚáéíóúñ])/g, '$1 ');
+    t = t.replace(/\s{2,}/g, ' ').trim();
+    return t;
+}
+
+function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
 function generarResumenIA(data) {
-    // Si el cliente escribió un resumen propio suficientemente largo, se respeta
+    // Si el cliente escribió un resumen propio, se corrige ortografía y se usa
     if (data.resumenUsuario && data.resumenUsuario.length > 40) {
-        return data.resumenUsuario;
+        return corregirOrtografiaES(data.resumenUsuario);
     }
 
-    const puesto = (data.puesto || '').trim();
-    const objetivo = (data.objetivo || '').trim();
+    const puesto = corregirOrtografiaES((data.puesto || '').trim());
+    const objetivo = corregirOrtografiaES((data.objetivo || '').trim());
     const habilidades = data.habilidades || [];
     const expCount = (data.experiencias || []).length;
-    const idiomas = (data.idiomas || '').trim();
-    const herramientas = (data.herramientas || '').trim();
+    const idiomas = corregirOrtografiaES((data.idiomas || '').trim());
+    const herramientas = corregirOrtografiaES((data.herramientas || '').trim());
 
-    // Soft skills detectadas para el perfil
-    const softKeys = ['trabajo en equipo','responsabilidad','proactividad','comunicación','adaptabilidad','organización','compromiso','liderazgo','orientación al cliente','resolución de problemas','puntualidad'];
+    const softKeys = ['trabajo en equipo','responsabilidad','proactividad','comunicación','comunicacion','adaptabilidad','organización','organizacion','compromiso','liderazgo','orientación al cliente','orientacion al cliente','resolución de problemas','resolucion de problemas','puntualidad'];
     const softSkills = [];
     habilidades.forEach(h => {
         const lower = String(h).toLowerCase();
-        if (softKeys.some(k => lower.includes(k)) || COMPETENCY_MAP[lower]) {
-            softSkills.push(h);
-        }
+        if (softKeys.some(k => lower.includes(k)) || COMPETENCY_MAP[lower]) softSkills.push(h);
     });
 
-    // Redacción en primera persona, con criterio de un profesional de RRHH
-    let perfil = '';
-    if (expCount === 0) {
-        perfil = puesto
-            ? `Profesional orientado/a al área de ${puesto}, con formación sólida y una marcada disposición para integrarme a entornos laborales exigentes y de constante aprendizaje.`
-            : `Profesional con formación sólida y una marcada disposición para integrarme a entornos laborales exigentes y de constante aprendizaje.`;
-    } else if (expCount === 1) {
-        perfil = puesto
-            ? `Profesional con experiencia concreta en ${puesto}, caracterizado/a por el compromiso, la capacidad de adaptación y la orientación a resultados.`
-            : `Profesional con experiencia laboral concreta, caracterizado/a por el compromiso, la capacidad de adaptación y la orientación a resultados.`;
-    } else {
-        perfil = puesto
-            ? `Profesional con trayectoria consolidada en ${puesto}, con capacidad demostrada para aportar valor en equipos de trabajo, cumplir objetivos y responder con solvencia a distintos desafíos operativos.`
-            : `Profesional con trayectoria consolidada, con capacidad demostrada para aportar valor en equipos de trabajo, cumplir objetivos y responder con solvencia a distintos desafíos operativos.`;
-    }
+    // --- Variedad de aperturas según experiencia ---
+    const aperturasSinExp = puesto ? [
+        `Profesional orientado/a al área de ${puesto}, con formación sólida y ganas de integrarme a equipos de trabajo dinámicos.`,
+        `Ingresante al mercado laboral con foco en ${puesto}, preparado/a para aportar compromiso, aprendizaje rápido y buena disposición.`,
+        `Perfil junior en ${puesto}, con base formativa consistente y motivación por desarrollarme en un entorno profesional desafiante.`,
+        `Cuento con formación orientada a ${puesto} y una actitud proactiva para sumarme a proyectos donde pueda crecer y aportar valor desde el primer día.`,
+        `Me presento como profesional en formación en ${puesto}, con interés genuino por consolidar mi carrera y contribuir a los objetivos del equipo.`,
+    ] : [
+        `Profesional con formación sólida y una marcada disposición para integrarme a entornos laborales de constante aprendizaje.`,
+        `Perfil con motivación por iniciar o consolidar mi trayectoria laboral, aportando compromiso, orden y capacidad de aprendizaje.`,
+        `Cuento con una base formativa consistente y con ganas de desarrollarme en un entorno profesional exigente y colaborativo.`,
+        `Me caracterizo por la responsabilidad y la proactividad, y busco una oportunidad para aplicar mis conocimientos en un puesto real.`,
+    ];
 
+    const aperturasUnaExp = puesto ? [
+        `Profesional con experiencia concreta en ${puesto}, orientado/a a resultados y con buena capacidad de adaptación.`,
+        `Cuento con experiencia en ${puesto} y me destaco por el compromiso, la organización y el trabajo colaborativo.`,
+        `He desarrollado experiencia en ${puesto}, lo que me permitió fortalecer mi sentido de responsabilidad y orientación al cliente.`,
+        `Perfil con recorrido inicial en ${puesto}, preparado/a para asumir mayores desafíos con solvencia y actitud profesional.`,
+        `Aporto experiencia en ${puesto}, combinando habilidades operativas con una comunicación clara y foco en el cumplimiento de objetivos.`,
+    ] : [
+        `Profesional con experiencia laboral concreta, caracterizado/a por el compromiso y la orientación a resultados.`,
+        `Cuento con experiencia en el ámbito laboral y me destaco por la adaptabilidad y el trabajo en equipo.`,
+        `He transitado una primera etapa profesional que me permitió consolidar hábitos de trabajo, responsabilidad y proactividad.`,
+    ];
+
+    const aperturasMulti = puesto ? [
+        `Profesional con trayectoria consolidada en ${puesto}, con capacidad demostrada para aportar valor en equipos de trabajo y alcanzar objetivos.`,
+        `Cuento con una sólida experiencia en ${puesto}, orientada a la mejora continua, el trabajo colaborativo y la resolución de problemas.`,
+        `Mi recorrido en ${puesto} me permitió desarrollar autonomía, criterio profesional y una fuerte orientación a resultados.`,
+        `Profesional de ${puesto} con experiencia diversa, acostumbrado/a a entornos dinámicos y a cumplir metas con calidad y responsabilidad.`,
+        `Aporto trayectoria en ${puesto}, combinando expertise operativo con habilidades interpersonales y foco en la eficiencia.`,
+        `Con experiencia acumulada en ${puesto}, me destaco por la capacidad de organización, el liderazgo de tareas y la comunicación efectiva.`,
+    ] : [
+        `Profesional con trayectoria consolidada, con capacidad demostrada para aportar valor en equipos de trabajo y cumplir objetivos.`,
+        `Cuento con experiencia laboral diversa, orientada a resultados, mejora continua y trabajo colaborativo.`,
+        `Mi recorrido profesional me permitió desarrollar autonomía, responsabilidad y solvencia ante distintos desafíos operativos.`,
+    ];
+
+    let perfil;
+    if (expCount === 0) perfil = pickRandom(aperturasSinExp);
+    else if (expCount === 1) perfil = pickRandom(aperturasUnaExp);
+    else perfil = pickRandom(aperturasMulti);
+
+    // --- Fortalezas (varias formulaciones) ---
     let competenciasTxt = '';
     if (softSkills.length > 0) {
-        const destacadas = softSkills.slice(0, 4).join(', ');
-        competenciasTxt = ` Mis principales fortalezas incluyen ${destacadas.toLowerCase()}, competencias que aplico de manera transversal en el desempeño diario.`;
+        const destacadas = shuffle(softSkills).slice(0, Math.min(4, softSkills.length)).map(s => s.toLowerCase());
+        const lista = destacadas.length === 1 ? destacadas[0]
+            : destacadas.slice(0, -1).join(', ') + ' y ' + destacadas[destacadas.length - 1];
+        competenciasTxt = pickRandom([
+            ` Mis principales fortalezas incluyen ${lista}, competencias que aplico de manera transversal en el desempeño diario.`,
+            ` Me destaco por ${lista}, cualidades que refuerzan mi desempeño individual y en equipo.`,
+            ` Entre mis competencias más valoradas se encuentran ${lista}.`,
+            ` Aporto ${lista}, con un enfoque profesional y orientado a la calidad del trabajo.`,
+            ` En el día a día aplico ${lista} para alcanzar mejores resultados y sostener buenas relaciones laborales.`,
+        ]);
     } else {
-        competenciasTxt = ' Me caracterizo por una actitud proactiva, responsabilidad en el cumplimiento de tareas y orientación al logro de resultados.';
+        competenciasTxt = pickRandom([
+            ' Me caracterizo por una actitud proactiva, responsabilidad en el cumplimiento de tareas y orientación al logro de resultados.',
+            ' Me defino por el compromiso, la organización personal y la capacidad de adaptarme con rapidez a nuevos contextos.',
+            ' Destaco por la puntualidad, el orden y una comunicación clara orientada a resolver necesidades del entorno de trabajo.',
+            ' Aporto proactividad, sentido de la responsabilidad y buena disposición para el trabajo en equipo.',
+        ]);
     }
 
+    // --- Herramientas e idiomas (variedad) ---
     let techTxt = '';
     if (herramientas) {
-        techTxt = ` Poseo manejo de ${herramientas}.`;
+        techTxt = pickRandom([
+            ` Poseo manejo de ${herramientas}.`,
+            ` Cuento con manejo de herramientas tales como ${herramientas}.`,
+            ` Utilizo de forma habitual ${herramientas}.`,
+            ` Tengo dominio práctico de ${herramientas}.`,
+        ]);
     }
 
     let idiomasTxt = '';
     if (idiomas) {
-        idiomasTxt = ` Cuento con conocimientos de ${idiomas}.`;
+        idiomasTxt = pickRandom([
+            ` Cuento con conocimientos de ${idiomas}.`,
+            ` Manejo ${idiomas}.`,
+            ` En cuanto a idiomas, poseo ${idiomas}.`,
+        ]);
     }
 
-    let cierre = '';
-    const objLower = objetivo.toLowerCase();
+    // --- Cierre (variedad + objetivo) ---
+    const objLower = (objetivo || '').toLowerCase();
+    let cierre;
     if (objLower && objLower !== 'general' && objetivo.length > 5) {
-        cierre = ` Actualmente me encuentro en búsqueda de oportunidades vinculadas a ${objetivo}, donde pueda aplicar mi experiencia, aportar a los objetivos de la organización y continuar desarrollando mi carrera profesional.`;
+        cierre = pickRandom([
+            ` Actualmente me encuentro en búsqueda de oportunidades vinculadas a ${objetivo}, donde pueda aplicar mi experiencia y seguir creciendo profesionalmente.`,
+            ` Busco desarrollarme en ${objetivo}, aportando mi experiencia a los objetivos de la organización.`,
+            ` Mi objetivo es integrarme a un equipo en el ámbito de ${objetivo}, contribuyendo con compromiso y resultados concretos.`,
+            ` Estoy en búsqueda activa de roles relacionados con ${objetivo}, con interés en aportar valor y consolidar mi carrera.`,
+        ]);
     } else {
-        cierre = ' Actualmente me encuentro en búsqueda de nuevos desafíos profesionales donde pueda contribuir con mi experiencia y seguir creciendo dentro de la organización.';
+        cierre = pickRandom([
+            ' Actualmente me encuentro en búsqueda de nuevos desafíos profesionales donde pueda contribuir con mi experiencia y seguir creciendo dentro de la organización.',
+            ' Busco una oportunidad laboral estable donde pueda aplicar mis competencias y continuar mi desarrollo profesional.',
+            ' Me interesa sumarme a un equipo de trabajo en el que pueda aportar valor, aprender y proyectar a largo plazo mi carrera.',
+            ' Estoy en búsqueda de un nuevo desafío que me permita seguir creciendo y contribuir a los objetivos de la organización.',
+        ]);
     }
 
-    return `${perfil}${competenciasTxt}${techTxt}${idiomasTxt}${cierre}`;
+    // Orden variable de bloques intermedios (fortalezas / tech / idiomas)
+    const bloques = shuffle([competenciasTxt, techTxt, idiomasTxt].filter(Boolean));
+    const texto = `${perfil}${bloques.join('')}${cierre}`;
+    return corregirOrtografiaES(texto);
 }
 
 function transformarACompetencias(habilidades) {
@@ -1093,7 +1235,8 @@ function transformarACompetencias(habilidades) {
         for (const [k, v] of Object.entries(COMPETENCY_MAP)) {
             if (key.includes(k) || k.includes(key)) return v;
         }
-        return h.charAt(0).toUpperCase() + h.slice(1);
+        const fixed = corregirOrtografiaES(h.trim());
+        return fixed.charAt(0).toUpperCase() + fixed.slice(1);
     });
 }
 

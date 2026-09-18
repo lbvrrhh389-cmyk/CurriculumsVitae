@@ -1,10 +1,12 @@
+
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LBV RRHH - Generador de Curriculum Vitae</title>
-    <link rel="stylesheet" href="styles.css?v=20260917e">
+    <link rel="stylesheet" href="styles.css?v=20260917f">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&family=Roboto:wght@400;500;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
@@ -343,7 +345,8 @@
 
                 <div id="adminCVArea" class="hidden">
                     <div class="admin-edit-banner">
-                        ✏️ <strong>Modo edición:</strong> hacé clic en cualquier texto del CV para corregirlo. Los cambios se reflejan al descargar el PDF.
+                        ✏️ <strong>Edición:</strong> clic en el texto para corregirlo.
+                        Usá <strong>«Mover elementos»</strong> para arrastrar bloques (foto, secciones, párrafos) y acomodar la posición. Los cambios se aplican al PDF.
                     </div>
                     <div class="admin-toolbar">
                         <div class="template-switcher">
@@ -358,9 +361,10 @@
                             <button type="button" class="tpl-btn" data-tpl="pastel" onclick="adminCambiarPlantilla('pastel')">Pastel</button>
                         </div>
                         <div class="cv-actions">
-                            <button type="button" class="btn-secondary" onclick="adminRestablecerCV()">↺ Restablecer texto</button>
+                            <button type="button" class="btn-secondary" id="btnAdminMove" onclick="toggleAdminMoveMode()">✥ Mover elementos</button>
+                            <button type="button" class="btn-secondary" onclick="adminRestablecerCV()">↺ Restablecer</button>
                             <button type="button" class="btn-primary" onclick="adminDescargarPDF()">📥 Descargar PDF</button>
-                            <button type="button" class="btn-whatsapp" onclick="adminEnviarWhatsApp()">📱 Enviar por WhatsApp</button>
+                            <button type="button" class="btn-whatsapp" onclick="adminEnviarWhatsApp()">📱 WhatsApp</button>
                         </div>
                     </div>
 
@@ -420,8 +424,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-    <script src="firebase-config.js?v=20260917e"></script>
-    <script src="google-config.js?v=20260917e"></script>
-    <script src="script.js?v=20260917e"></script>
+    <script src="firebase-config.js?v=20260917f"></script>
+    <script src="google-config.js?v=20260917f"></script>
+    <script src="script.js?v=20260917f"></script>
 </body>
 </html>

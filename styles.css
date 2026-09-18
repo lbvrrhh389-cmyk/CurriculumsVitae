@@ -1279,3 +1279,28 @@ body {
 .template-pastel .cv-item-subtitle { font-size: 9pt; color: #777; font-style: italic; }
 .template-pastel .cv-item-desc { font-size: 9pt; color: #333; }
 .template-pastel .cv-item { margin-bottom: 0.7rem; }
+
+
+/* Admin: modo mover elementos del CV */
+#adminCvPreview.move-mode {
+    outline: 2px dashed #c026d3 !important;
+    cursor: grab;
+}
+#adminCvPreview.move-mode * {
+    cursor: grab !important;
+}
+#adminCvPreview.move-mode .dragging {
+    cursor: grabbing !important;
+    opacity: 0.92;
+    z-index: 5;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+#btnAdminMove.active {
+    background: #f5d0fe;
+    border-color: #c026d3;
+    color: #86198f;
+}
+.cv-photo, img.cv-photo {
+    object-fit: cover;
+    display: block;
+}

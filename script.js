@@ -61,7 +61,8 @@ const state = {
     // Admin
     currentSolicitud: null,
     adminTemplate: 'moderno',
-    adminEdited: false
+    adminEdited: false,
+    adminMoveMode: false
 };
 
 const SKILL_EXAMPLES = [
@@ -774,6 +775,38 @@ async function compressForDrive(fileOrDataUrl, fileName) {
   });
 }
 
+/** Foto pequeña para guardar en Firestore (límite doc ~1MB). */
+async function compressPhotoForFirestore(dataUrl) {
+  if (!dataUrl || !String(dataUrl).startsWith('data:image')) return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const max = 320;
+        let w = img.width, h = img.height;
+        if (w > max || h > max) {
+          if (w >= h) { h = Math.round(h * (max / w)); w = max; }
+          else { w = Math.round(w * (max / h)); h = max; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        let out = canvas.toDataURL('image/jpeg', 0.72);
+        if (out.length > 350000) out = canvas.toDataURL('image/jpeg', 0.55);
+        if (out.length > 450000) out = canvas.toDataURL('image/jpeg', 0.4);
+        resolve(out);
+      } catch (e) {
+        console.warn('compressPhotoForFirestore', e);
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+
 async function withTimeout(promise, ms, label) {
     let timer;
     const timeout = new Promise((_, reject) => {
@@ -845,17 +878,34 @@ async function enviarSolicitud() {
             cursos: data.cursos || [],
             template: data.template || 'moderno',
             photoUrl: null,
-            photoData: null,
+            photoData: null, // se completa abajo (comprimida)
             comprobanteUrl: null,
             comprobanteName: data.comprobanteName || null,
         }));
 
+        // Guardar foto comprimida en Firestore para que el admin la vea en el CV
+        if (data.photoData) {
+            try {
+                const small = await withTimeout(
+                    compressPhotoForFirestore(data.photoData),
+                    12000,
+                    'comprimir foto Firestore'
+                );
+                if (small) {
+                    doc.photoData = small;
+                    console.log('Foto para Firestore:', Math.round(small.length / 1024), 'KB');
+                }
+            } catch (e) {
+                console.warn('No se pudo comprimir foto para Firestore', e);
+            }
+        }
+
         await withTimeout(
             db.collection('solicitudes').doc(id).set(doc),
-            15000,
+            20000,
             'guardar en Firestore'
         );
-        console.log('Solicitud guardada en Firestore', id);
+        console.log('Solicitud guardada en Firestore', id, doc.photoData ? '(con foto)' : '(sin foto)');
 
         // Archivos → Google Drive (vía Apps Script), NO Firebase Storage
         // (evita el error CORS de Storage desde GitHub Pages)
@@ -1512,11 +1562,116 @@ function renderAdminCV() {
     const preview = document.getElementById('adminCvPreview');
     preview.innerHTML = html;
     preview.className = `cv-document template-${state.adminTemplate}`;
+    state.adminEdited = false;
+    state.adminMoveMode = false;
+    preview.classList.remove('move-mode');
+    const moveBtn = document.getElementById('btnAdminMove');
+    if (moveBtn) {
+        moveBtn.classList.remove('active');
+        moveBtn.textContent = '✥ Mover elementos';
+    }
     preview.setAttribute('contenteditable', 'true');
     preview.setAttribute('spellcheck', 'true');
-    state.adminEdited = false;
-    // Marcar que hubo edición manual
     preview.oninput = () => { state.adminEdited = true; };
+    // Asegurar que la foto se vea (photoData o photoUrl)
+    ensureAdminPhotoVisible(preview, data);
+}
+
+function ensureAdminPhotoVisible(preview, data) {
+    const src = data.photoData || data.photoUrl || '';
+    if (!src) return;
+    const imgs = preview.querySelectorAll('img.cv-photo, .cv-photo img, img');
+    let hasPhoto = false;
+    imgs.forEach(img => {
+        if (img.classList.contains('cv-photo') || img.closest('.cv-header') || img.closest('.cv-sidebar') || img.closest('.cv-pastel-left')) {
+            if (!img.getAttribute('src') || img.getAttribute('src') === '') {
+                img.setAttribute('src', src);
+            }
+            hasPhoto = true;
+        }
+    });
+    // Si el HTML no trajo img pero hay foto, no forzamos layout distinto: buildCVHtml ya debería incluirla
+    if (!hasPhoto) {
+        console.warn('CV sin etiqueta de foto; photoData presente:', !!data.photoData, 'photoUrl:', !!data.photoUrl);
+    }
+}
+
+function toggleAdminMoveMode() {
+    const preview = document.getElementById('adminCvPreview');
+    if (!preview) return;
+    state.adminMoveMode = !state.adminMoveMode;
+    const btn = document.getElementById('btnAdminMove');
+    if (state.adminMoveMode) {
+        preview.setAttribute('contenteditable', 'false');
+        preview.classList.add('move-mode');
+        if (btn) { btn.classList.add('active'); btn.textContent = '✎ Volver a editar texto'; }
+        initAdminDrag(preview);
+    } else {
+        preview.setAttribute('contenteditable', 'true');
+        preview.classList.remove('move-mode');
+        if (btn) { btn.classList.remove('active'); btn.textContent = '✥ Mover elementos'; }
+    }
+}
+
+function initAdminDrag(preview) {
+    if (preview._dragInited) return;
+    preview._dragInited = true;
+
+    let dragging = null;
+    let startX = 0, startY = 0;
+    let origX = 0, origY = 0;
+
+    const getTarget = (el) => {
+        if (!el || el === preview) return null;
+        // Prefer blocks / photo / items
+        const block = el.closest('.cv-item, .cv-header, .cv-section, .cv-photo, img.cv-photo, .cv-sidebar, .cv-pastel-left, .cv-pastel-right, h1, .cv-puesto, .cv-contact, .cv-section-title, p, li, .cv-skill-tag, .cv-main, .cv-side-text');
+        return block || el;
+    };
+
+    const onDown = (e) => {
+        if (!state.adminMoveMode) return;
+        const t = getTarget(e.target);
+        if (!t || t === preview) return;
+        e.preventDefault();
+        dragging = t;
+        dragging.classList.add('dragging');
+        const style = window.getComputedStyle(dragging);
+        if (style.position === 'static') {
+            dragging.style.position = 'relative';
+        }
+        const tx = parseFloat(dragging.dataset.tx || '0');
+        const ty = parseFloat(dragging.dataset.ty || '0');
+        origX = tx; origY = ty;
+        const pt = e.touches ? e.touches[0] : e;
+        startX = pt.clientX;
+        startY = pt.clientY;
+    };
+
+    const onMove = (e) => {
+        if (!dragging) return;
+        const pt = e.touches ? e.touches[0] : e;
+        const dx = pt.clientX - startX;
+        const dy = pt.clientY - startY;
+        const nx = origX + dx;
+        const ny = origY + dy;
+        dragging.dataset.tx = nx;
+        dragging.dataset.ty = ny;
+        dragging.style.transform = `translate(${nx}px, ${ny}px)`;
+        state.adminEdited = true;
+        if (e.cancelable) e.preventDefault();
+    };
+
+    const onUp = () => {
+        if (dragging) dragging.classList.remove('dragging');
+        dragging = null;
+    };
+
+    preview.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    preview.addEventListener('touchstart', onDown, { passive: false });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
 }
 
 function adminRestablecerCV() {

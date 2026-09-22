@@ -1,5 +1,6 @@
 
 
+
 // LBV RRHH - Generador de CV v3 (Cliente + Admin)
 const ADMIN_PASSWORD = 'lbvadmin';
 const STORAGE_KEY = 'lbv_solicitudes'; // fallback offline local
@@ -1849,11 +1850,16 @@ function adminCambiarPlantilla(nombre) {
 
 function adminDescargarPDF() {
     if (!state.currentSolicitud) return;
-    const element = document.getElementById('adminCvPreview');
-    if (!element || !element.innerHTML.trim()) {
+    const source = document.getElementById('adminCvPreview');
+    if (!source || !source.innerHTML.trim()) {
         alert('No hay CV para descargar. Seleccioná una solicitud primero.');
         return;
     }
+    if (typeof html2pdf === 'undefined') {
+        alert('No se cargó la librería de PDF. Recargá la página e intentá de nuevo.');
+        return;
+    }
+
     const data = state.currentSolicitud;
     const nombreArchivo = `CV_${(data.nombre || 'Curriculum').replace(/\s+/g, '_')}.pdf`;
 
@@ -1861,75 +1867,119 @@ function adminDescargarPDF() {
     const originalText = btn ? btn.textContent : '';
     if (btn) { btn.textContent = 'Generando PDF...'; btn.disabled = true; }
 
-    const wasEditable = element.getAttribute('contenteditable');
-    element.setAttribute('contenteditable', 'false');
-    element.classList.remove('move-mode');
-    element.classList.add('pdf-exporting');
+    // --- Clon A4 fuera del layout del admin (evita corrimiento a la derecha) ---
+    const MM_TO_PX = 96 / 25.4;
+    const A4_W = Math.round(210 * MM_TO_PX); // ~794px
 
-    // Centrar scroll del contenedor para evitar desfase horizontal
-    const wrapper = element.closest('.cv-preview-wrapper');
-    const prevScrollLeft = wrapper ? wrapper.scrollLeft : 0;
-    const prevScrollTop = wrapper ? wrapper.scrollTop : 0;
-    if (wrapper) {
-        wrapper.scrollLeft = 0;
-        wrapper.scrollTop = 0;
-    }
-    window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 20);
+    const host = document.createElement('div');
+    host.id = 'lbv-pdf-host';
+    host.style.cssText = [
+        'position:fixed',
+        'left:0',
+        'top:0',
+        'width:' + A4_W + 'px',
+        'margin:0',
+        'padding:0',
+        'background:#ffffff',
+        'z-index:2147483646',
+        'overflow:visible',
+        'pointer-events:none',
+        'box-sizing:border-box'
+    ].join(';');
 
-    const restore = () => {
-        element.setAttribute('contenteditable', wasEditable || 'true');
-        element.classList.remove('pdf-exporting');
-        if (wrapper) {
-            wrapper.scrollLeft = prevScrollLeft;
-            wrapper.scrollTop = prevScrollTop;
-        }
+    const clone = source.cloneNode(true);
+    clone.removeAttribute('id');
+    clone.removeAttribute('contenteditable');
+    clone.classList.remove('move-mode');
+    clone.classList.add('cv-document', 'pdf-exporting');
+
+    // Limpiar restos visuales de edición / arrastre que no deben ir al PDF
+    clone.querySelectorAll('*').forEach((el) => {
+        el.removeAttribute('contenteditable');
+        if (el.classList) el.classList.remove('move-mode');
+    });
+
+    clone.style.cssText = [
+        'width:' + A4_W + 'px',
+        'max-width:' + A4_W + 'px',
+        'min-height:' + Math.round(297 * MM_TO_PX) + 'px',
+        'height:auto',
+        'margin:0',
+        'padding:12mm 14mm',
+        'box-sizing:border-box',
+        'background:#ffffff',
+        'box-shadow:none',
+        'border:none',
+        'outline:none',
+        'transform:none',
+        'position:relative',
+        'left:0',
+        'top:0',
+        'overflow:visible',
+        'font-family:Inter,system-ui,sans-serif'
+    ].join(';');
+
+    host.appendChild(clone);
+    document.body.appendChild(host);
+
+    const cleanup = () => {
+        try { host.remove(); } catch (_) {}
         if (btn) { btn.textContent = originalText; btn.disabled = false; }
     };
 
-    // Esperar imágenes del CV antes de capturar
-    const imgs = Array.from(element.querySelectorAll('img'));
-    const waitImgs = Promise.all(imgs.map(img => {
+    const waitImgs = Promise.all(Array.from(clone.querySelectorAll('img')).map((img) => {
+        try { img.crossOrigin = 'anonymous'; } catch (_) {}
         if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
             const done = () => resolve();
             img.onload = done;
             img.onerror = done;
-            setTimeout(done, 4000);
+            setTimeout(done, 5000);
         });
     }));
 
-    waitImgs.then(() => new Promise(r => setTimeout(r, 250))).then(() => {
-        // Medidas reales del elemento visible
-        const w = Math.max(element.scrollWidth, element.offsetWidth, 1);
-        const h = Math.max(element.scrollHeight, element.offsetHeight, 1);
+    waitImgs
+        .then(() => new Promise((r) => setTimeout(r, 200)))
+        .then(() => {
+            const canvasW = Math.max(clone.scrollWidth, clone.offsetWidth, A4_W);
+            const canvasH = Math.max(clone.scrollHeight, clone.offsetHeight, 1);
 
-        const opt = {
-            margin: [8, 8, 8, 8],
-            filename: nombreArchivo,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: {
-                scale: 2,
-                useCORS: true,
-                allowTaint: true,
-                logging: false,
-                backgroundColor: '#ffffff',
-                scrollX: 0,
-                scrollY: 0,
-                windowWidth: document.documentElement.clientWidth,
-                windowHeight: document.documentElement.clientHeight
-            },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css', 'legacy'] }
-        };
+            const opt = {
+                margin: 0, // el padding del CV hace de margen interno → centrado visual
+                filename: nombreArchivo,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    scrollX: 0,
+                    scrollY: 0,
+                    x: 0,
+                    y: 0,
+                    width: canvasW,
+                    height: canvasH,
+                    windowWidth: canvasW,
+                    windowHeight: canvasH
+                },
+                jsPDF: {
+                    unit: 'mm',
+                    format: 'a4',
+                    orientation: 'portrait',
+                    compress: true
+                },
+                pagebreak: { mode: ['css', 'legacy'] }
+            };
 
-        return html2pdf().set(opt).from(element).save();
-    }).then(() => {
-        restore();
-    }).catch(err => {
-        console.error('PDF error', err);
-        restore();
-        alert('Error al generar el PDF. Probá de nuevo o cambiá de plantilla.');
-    });
+            return html2pdf().set(opt).from(clone).save();
+        })
+        .then(() => cleanup())
+        .catch((err) => {
+            console.error('PDF error', err);
+            cleanup();
+            alert('Error al generar el PDF. Probá de nuevo o cambiá de plantilla.');
+        });
 }
 
 function adminEnviarWhatsApp() {

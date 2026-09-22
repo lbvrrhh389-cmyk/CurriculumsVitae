@@ -1,5 +1,6 @@
 
 
+
 :root {
     --primary: #0f2744;
     --primary-light: #1a3a5c;
@@ -1040,27 +1041,9 @@ body {
     cursor: text;
 }
 
-#adminCvPreview.pdf-exporting {
-    box-shadow: none !important;
-    outline: none !important;
-    border: none !important;
-    background: #fff !important;
-    overflow: visible !important;
-    transform: none !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-}
-#lbv-pdf-host {
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 210mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-#adminCvPreview.pdf-exporting *:hover {
-    background: transparent !important;
-}
+
+
+
 
 /* Evitar que secciones se partan a la mitad en el PDF */
 .cv-item, .cv-section, .cv-header {
@@ -1308,4 +1291,38 @@ body {
 .cv-photo, img.cv-photo {
     object-fit: cover;
     display: block;
+}
+
+/* ===== PDF export (A4 centrado) ===== */
+#lbv-pdf-host {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    z-index: 2147483646 !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+#lbv-pdf-host .cv-document,
+#lbv-pdf-host .pdf-exporting,
+#adminCvPreview.pdf-exporting {
+    box-shadow: none !important;
+    outline: none !important;
+    border: none !important;
+    background: #fff !important;
+    overflow: visible !important;
+    transform: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    margin: 0 !important;
+}
+#lbv-pdf-host .cv-document *,
+#adminCvPreview.pdf-exporting *:hover {
+    background-image: none;
+}
+.cv-item, .cv-section, .cv-header, .cv-item-title, .cv-section-title {
+    page-break-inside: avoid;
+    break-inside: avoid;
 }

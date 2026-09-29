@@ -426,7 +426,13 @@ function addExperiencia() {
             </div>
             <div class="form-group">
                 <label>Año de fin</label>
-                <input type="text" class="exp-fin" placeholder="Ej: 2023 o Actualidad">
+                <input type="text" class="exp-fin" placeholder="Ej: 2023">
+            </div>
+            <div class="form-group full exp-actual-row">
+                <label class="checkbox-label">
+                    <input type="checkbox" class="exp-actual" onchange="toggleExpActual(this)">
+                    <span>Actualmente trabajo aquí</span>
+                </label>
             </div>
             <div class="form-group full">
                 <label>Tareas y responsabilidades</label>
@@ -435,6 +441,23 @@ function addExperiencia() {
         </div>
     `;
     container.appendChild(div);
+}
+
+function toggleExpActual(checkbox) {
+    const item = checkbox.closest('.dynamic-item');
+    if (!item) return;
+    const finInput = item.querySelector('.exp-fin');
+    if (!finInput) return;
+    if (checkbox.checked) {
+        finInput.value = '';
+        finInput.disabled = true;
+        finInput.placeholder = 'Actualidad';
+        finInput.classList.add('is-disabled');
+    } else {
+        finInput.disabled = false;
+        finInput.placeholder = 'Ej: 2023';
+        finInput.classList.remove('is-disabled');
+    }
 }
 
 function removeExperiencia(id) {
@@ -564,10 +587,12 @@ function getFormData() {
         const empresa = item.querySelector('.exp-empresa').value.trim();
         const puesto = item.querySelector('.exp-puesto').value.trim();
         const inicio = item.querySelector('.exp-inicio').value.trim();
-        const fin = item.querySelector('.exp-fin').value.trim();
+        const actual = !!item.querySelector('.exp-actual')?.checked;
+        let fin = item.querySelector('.exp-fin').value.trim();
+        if (actual) fin = ''; // formatPeriodo mostrará "Actualidad"
         const tareas = item.querySelector('.exp-tareas').value.trim();
         if (empresa || puesto) {
-            experiencias.push({ empresa, puesto, inicio, fin, tareas });
+            experiencias.push({ empresa, puesto, inicio, fin, actual, tareas });
         }
     });
 
@@ -1241,11 +1266,16 @@ function transformarACompetencias(habilidades) {
     });
 }
 
-function formatPeriodo(inicio, fin) {
-    if (!inicio && !fin) return '';
+function formatPeriodo(inicio, fin, actual) {
+    const finNorm = String(fin || '').trim().toLowerCase();
+    const esActual = actual === true ||
+        !finNorm ||
+        ['actualidad', 'actual', 'presente', 'hoy', 'actualmente'].includes(finNorm);
+    if (!inicio && !fin && !esActual) return '';
+    if (inicio && esActual) return `${inicio} – Actualidad`;
     if (inicio && fin) return `${inicio} – ${fin}`;
     if (inicio) return `${inicio} – Actualidad`;
-    return fin;
+    return fin || '';
 }
 
 function buildCVHtml(data) {
@@ -1278,7 +1308,7 @@ function buildCVHtml(data) {
                                 <div class="cv-item-title">${exp.puesto || 'Puesto'}</div>
                                 <div class="cv-item-subtitle">${exp.empresa || ''}</div>
                             </div>
-                            <div class="cv-item-date">${formatPeriodo(exp.inicio, exp.fin)}</div>
+                            <div class="cv-item-date">${formatPeriodo(exp.inicio, exp.fin, exp.actual)}</div>
                         </div>
                         ${exp.tareas ? `<div class="cv-item-desc">${exp.tareas}</div>` : ''}
                     </div>
@@ -1404,7 +1434,7 @@ function buildCVTecnico(data, resumen, competencias, photo) {
                     <div class="cv-item-title">${e.puesto || ''}</div>
                     <div class="cv-item-subtitle">${e.empresa || ''}${data.ubicacion ? '' : ''}</div>
                 </div>
-                <div class="cv-item-date">${formatPeriodo(e.inicio, e.fin)}</div>
+                <div class="cv-item-date">${formatPeriodo(e.inicio, e.fin, e.actual)}</div>
             </div>
             ${e.tareas ? `<div class="cv-item-desc"><ul>${String(e.tareas).split(/[.;]/).filter(x => x.trim()).map(x => `<li>${x.trim()}</li>`).join('')}</ul></div>` : ''}
         </div>
@@ -1412,10 +1442,10 @@ function buildCVTecnico(data, resumen, competencias, photo) {
 
     const formacion = [
         ...(data.estudiosSuperiores || []).map(e => ({
-            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin)
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin, e.actual)
         })),
         ...(data.estudiosSecundarios || []).map(e => ({
-            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin)
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin, e.actual)
         })),
         ...(data.cursos || []).map(c => ({
             t: c.nombre, s: c.institucion, d: c.anio || ''
@@ -1469,7 +1499,7 @@ function buildCVSidebar(data, resumen, competencias, photo) {
         <div class="cv-item">
             <div class="cv-item-header">
                 <div class="cv-item-title">${e.puesto || ''}</div>
-                <div class="cv-item-date">${formatPeriodo(e.inicio, e.fin)}</div>
+                <div class="cv-item-date">${formatPeriodo(e.inicio, e.fin, e.actual)}</div>
             </div>
             <div class="cv-item-subtitle">${e.empresa || ''}</div>
             ${e.tareas ? `<div class="cv-item-desc">${e.tareas}</div>` : ''}
@@ -1478,10 +1508,10 @@ function buildCVSidebar(data, resumen, competencias, photo) {
 
     const formacion = [
         ...(data.estudiosSuperiores || []).map(e => ({
-            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin)
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin, e.actual)
         })),
         ...(data.estudiosSecundarios || []).map(e => ({
-            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin)
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin, e.actual)
         })),
         ...(data.cursos || []).map(c => ({
             t: c.nombre, s: c.institucion, d: c.anio || ''
@@ -1527,17 +1557,17 @@ function buildCVPastel(data, resumen, competencias, photo) {
     const exp = (data.experiencias || []).map(e => `
         <div class="cv-item">
             <div class="cv-item-title">• ${e.puesto || ''}</div>
-            <div class="cv-item-subtitle">${e.empresa || ''}${e.inicio || e.fin ? ', ' + formatPeriodo(e.inicio, e.fin) : ''}</div>
+            <div class="cv-item-subtitle">${e.empresa || ''}${e.inicio || e.fin ? ', ' + formatPeriodo(e.inicio, e.fin, e.actual) : ''}</div>
             ${e.tareas ? `<div class="cv-item-desc">${e.tareas}</div>` : ''}
         </div>
     `).join('');
 
     const edu = [
         ...(data.estudiosSuperiores || []).map(e => ({
-            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin), extra: e.estado
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin, e.actual), extra: e.estado
         })),
         ...(data.estudiosSecundarios || []).map(e => ({
-            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin), extra: ''
+            t: e.titulo, s: e.establecimiento, d: formatPeriodo(e.inicio, e.fin, e.actual), extra: ''
         })),
     ].map(f => `
         <div class="cv-item">
